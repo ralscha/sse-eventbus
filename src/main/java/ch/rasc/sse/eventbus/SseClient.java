@@ -21,7 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Value.Style(visibility = ImplementationVisibility.PACKAGE)
 @Value.Immutable(copy = false, builder = false)
-public interface EventBusClient {
+public interface SseClient {
 
 	@Value.Parameter
 	String id();
@@ -29,7 +29,7 @@ public interface EventBusClient {
 	@Value.Parameter
 	SseEmitter emitter();
 
-	public static EventBusClient of(String id, SseEmitter emitter) {
+	public static SseClient of(String id, SseEmitter emitter) {
 		return ImmutableEventBusClient.of(id, emitter);
 	}
 }

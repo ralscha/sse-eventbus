@@ -41,7 +41,7 @@ import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 @ContextConfiguration
 @SuppressWarnings("unchecked")
 @DirtiesContext
-public class EventBusTest {
+public class SseEventBusTest {
 
 	@Configuration
 	@EnableSseEventBus
@@ -63,7 +63,7 @@ public class EventBusTest {
 	}
 
 	@Autowired
-	private EventBus eventBus;
+	private SseEventBus eventBus;
 
 	@Autowired
 	private ApplicationEventPublisher publisher;
@@ -153,7 +153,7 @@ public class EventBusTest {
 		this.eventBus.unregisterClient("3");
 		assertThat(eventSubscribers()).containsOnlyKeys("one");
 		assertThat(eventSubscribers().get("one")).containsExactly("1");
-		
+
 		this.eventBus.unregisterClient("1");
 		this.eventBus.unregisterClient("2");
 		this.eventBus.unregisterClient("3");
@@ -259,13 +259,13 @@ public class EventBusTest {
 		sleep(250, TimeUnit.MILLISECONDS);
 		assertThat(pendingAllEvents()).isEmpty();
 		assertThat(pendingClientEvents()).isEmpty();
-		
+
 		this.eventBus.unregisterClient("1");
 		this.eventBus.unregisterClient("2");
 	}
 
-	private Map<String, EventBusClient> clients() {
-		return (Map<String, EventBusClient>) ReflectionTestUtils.getField(this.eventBus,
+	private Map<String, SseClient> clients() {
+		return (Map<String, SseClient>) ReflectionTestUtils.getField(this.eventBus,
 				"clients");
 	}
 

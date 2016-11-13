@@ -22,7 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import ch.rasc.sse.eventbus.EventBus;
+import ch.rasc.sse.eventbus.SseEventBus;
 
 /**
  * To enable the SSE EventBus library create a @Configuration class that either
@@ -40,7 +40,7 @@ public class DefaultSseEventBusConfiguration {
 	private SseEventBusConfigurer configurer;
 
 	@Bean
-	public EventBus eventBus() {
+	public SseEventBus eventBus() {
 		SseEventBusConfigurer config = this.configurer;
 		if (config == null) {
 			config = new SseEventBusConfigurer() {
@@ -55,7 +55,7 @@ public class DefaultSseEventBusConfiguration {
 			taskScheduler = Executors.newSingleThreadScheduledExecutor();
 		}
 
-		return new EventBus(taskScheduler, config.clientExpirationInSeconds(),
+		return new SseEventBus(taskScheduler, config.clientExpirationInSeconds(),
 				config.messageExpirationInSeconds(),
 				config.schedulerDelayInMilliseconds(), config.noOfSendResponseTries());
 	}

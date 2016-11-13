@@ -18,9 +18,14 @@ package ch.rasc.sse.eventbus;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import ch.rasc.sse.eventbus.config.EnableSseEventBus;
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 
 @SpringBootApplication
 @EnableSseEventBus
-public class TestDefaultConfiguration {
-	// nothing here
+public class TestDefaultConfiguration implements SseEventBusConfigurer {
+	@Override
+	public int clientExpirationInSeconds() {
+		return 10;
+	}
+
 }

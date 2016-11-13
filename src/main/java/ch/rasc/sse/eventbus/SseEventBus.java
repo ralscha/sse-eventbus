@@ -35,12 +35,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEvent
 
 import net.jodah.expiringmap.ExpiringMap;
 
-public class EventBus {
+public class SseEventBus {
 
 	/**
-	 * Client Id -> EventBusClient
+	 * Client Id -> SseClient
 	 */
-	private final Map<String, EventBusClient> clients;
+	private final Map<String, SseClient> clients;
 
 	/**
 	 * Client Id -> Number of failed connection tries
@@ -66,9 +66,9 @@ public class EventBus {
 
 	private final int noOfSendResponseTries;
 
-	public EventBus(ScheduledExecutorService taskScheduler, int clientExpirationInSeconds,
-			int messageExpirationInSeconds, int schedulerDelayInMilliseconds,
-			int noOfSendResponseTries) {
+	public SseEventBus(ScheduledExecutorService taskScheduler,
+			int clientExpirationInSeconds, int messageExpirationInSeconds,
+			int schedulerDelayInMilliseconds, int noOfSendResponseTries) {
 
 		this.taskScheduler = taskScheduler;
 		this.noOfSendResponseTries = noOfSendResponseTries;
@@ -114,7 +114,7 @@ public class EventBus {
 	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
-		registerClient(EventBusClient.of(clientId, emitter));
+		registerClient(SseClient.of(clientId, emitter));
 
 		if (events != null && events.length > 0) {
 			for (String event : events) {
@@ -126,7 +126,7 @@ public class EventBus {
 	}
 
 	private void expirationListener(final String clientId,
-			@SuppressWarnings("unused") final EventBusClient client) {
+			@SuppressWarnings("unused") final SseClient client) {
 		Set<String> emptyEvents = new HashSet<>();
 		for (Map.Entry<String, Set<String>> entry : this.eventSubscribers.entrySet()) {
 			Set<String> clientIds = entry.getValue();
@@ -140,7 +140,7 @@ public class EventBus {
 		this.pendingClientEvents.remove(clientId);
 	}
 
-	public void registerClient(EventBusClient client) {
+	public void registerClient(SseClient client) {
 		this.clients.put(client.id(), client);
 		this.failedClients.remove(client.id());
 	}
@@ -227,7 +227,7 @@ public class EventBus {
 	}
 
 	private boolean sendMessagesToClient(String clientId, List<SseEvent> events) {
-		EventBusClient client = this.clients.get(clientId);
+		SseClient client = this.clients.get(clientId);
 		if (client != null) {
 			Map<String, List<SseEvent>> eventNameEvents = events.stream()
 					.collect(Collectors.groupingBy(SseEvent::name));
@@ -235,7 +235,16 @@ public class EventBus {
 			SseEventBuilder sseBuilder = SseEmitter.event();
 			for (Entry<String, List<SseEvent>> ene : eventNameEvents.entrySet()) {
 				sseBuilder.name(ene.getKey());
-				ene.getValue().stream().map(SseEvent::data).forEach(sseBuilder::data);
+				List<String> datas = new ArrayList<>();
+
+				for (SseEvent evt : ene.getValue()) {
+					if (!evt.combine()) {
+						datas.clear();
+					}
+					datas.add(evt.data());
+				}
+
+				datas.forEach(sseBuilder::data);
 			}
 
 			try {
@@ -261,20 +270,18 @@ public class EventBus {
 		SseEventBuilder sseBuilder = SseEmitter.event().name(eventName);
 		events.stream().map(SseEvent::data).forEach(sseBuilder::data);
 
-		for (Map.Entry<String, EventBusClient> entry : this.clients.entrySet()) {
-			EventBusClient client = entry.getValue();
+		for (Map.Entry<String, SseClient> entry : this.clients.entrySet()) {
+			SseClient client = entry.getValue();
 			try {
 				client.emitter().send(sseBuilder);
 			}
 			catch (Exception e) {
 				client.emitter().completeWithError(e);
-				int noOfTries = this.failedClients.merge(entry.getKey(), 1,
-						(v, vv) -> v + 1);
-				if (noOfTries == 1) {
-					this.pendingClientEvents
-							.computeIfAbsent(client.id(), k -> new ArrayList<>())
-							.addAll(events);
-				}
+				this.failedClients.merge(entry.getKey(), 1, (v, vv) -> v + 1);
+
+				this.pendingClientEvents
+						.computeIfAbsent(client.id(), k -> new ArrayList<>())
+						.addAll(events);
 			}
 		}
 

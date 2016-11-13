@@ -24,15 +24,15 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Controller
 public class TestController {
 
-	private final EventBus eventBus;
+	private final SseEventBus eventBus;
 
-	public TestController(EventBus eventBus) {
+	public TestController(SseEventBus eventBus) {
 		this.eventBus = eventBus;
 	}
 
 	@GetMapping("/register/{id}")
 	public SseEmitter eventbus(@PathVariable("id") String id) {
-		return this.eventBus.createSseEmitter(id, 5_000L);
+		return this.eventBus.createSseEmitter(id, 3_000L);
 	}
 
 	@ResponseBody
