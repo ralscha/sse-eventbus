@@ -30,6 +30,6 @@ public interface SseClient {
 	SseEmitter emitter();
 
 	public static SseClient of(String id, SseEmitter emitter) {
-		return ImmutableEventBusClient.of(id, emitter);
+		return ImmutableSseClient.of(id, emitter);
 	}
 }
