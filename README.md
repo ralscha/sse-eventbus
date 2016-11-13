@@ -1,4 +1,4 @@
-##darksky
+##sse-eventbus
 
 [![Build Status](https://api.travis-ci.org/ralscha/sse-eventbus.png)](https://travis-ci.org/ralscha/sse-eventbus)
 
