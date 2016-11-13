@@ -73,6 +73,7 @@ public class EventBusTest {
 		SseEmitter emitter = this.eventBus.createSseEmitter("1");
 		assertThat(emitter).isNotNull();
 		assertThat(emitter.getTimeout()).isEqualTo(180_000L);
+		this.eventBus.unregisterClient("1");
 	}
 
 	@Test
@@ -80,6 +81,7 @@ public class EventBusTest {
 		SseEmitter emitter = this.eventBus.createSseEmitter("1", 90_000L);
 		assertThat(emitter).isNotNull();
 		assertThat(emitter.getTimeout()).isEqualTo(90_000L);
+		this.eventBus.unregisterClient("1");
 	}
 
 	@Test
@@ -151,6 +153,10 @@ public class EventBusTest {
 		this.eventBus.unregisterClient("3");
 		assertThat(eventSubscribers()).containsOnlyKeys("one");
 		assertThat(eventSubscribers().get("one")).containsExactly("1");
+		
+		this.eventBus.unregisterClient("1");
+		this.eventBus.unregisterClient("2");
+		this.eventBus.unregisterClient("3");
 
 	}
 
@@ -193,6 +199,7 @@ public class EventBusTest {
 		sleep(250, TimeUnit.MILLISECONDS);
 		assertThat(pendingAllEvents()).isEmpty();
 		assertThat(pendingClientEvents()).isEmpty();
+		this.eventBus.unregisterClient("1");
 	}
 
 	@Test
@@ -227,6 +234,8 @@ public class EventBusTest {
 		sleep(250, TimeUnit.MILLISECONDS);
 		assertThat(pendingAllEvents()).isEmpty();
 		assertThat(pendingClientEvents()).isEmpty();
+		this.eventBus.unregisterClient("1");
+		this.eventBus.unregisterClient("2");
 	}
 
 	@Test
@@ -250,6 +259,9 @@ public class EventBusTest {
 		sleep(250, TimeUnit.MILLISECONDS);
 		assertThat(pendingAllEvents()).isEmpty();
 		assertThat(pendingClientEvents()).isEmpty();
+		
+		this.eventBus.unregisterClient("1");
+		this.eventBus.unregisterClient("2");
 	}
 
 	private Map<String, EventBusClient> clients() {
