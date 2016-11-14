@@ -30,19 +30,17 @@ import java.util.stream.Collectors;
 
 import javax.annotation.PreDestroy;
 
+import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
-
-import net.jodah.expiringmap.ExpiringMap;
 
 public class SseEventBus {
 
 	/**
 	 * Client Id -> SseEmitter
 	 */
-	private final Map<String, SseEmitter> clients;
+	private final Map<String, SseClient> clients;
 
 	/**
 	 * Client Id -> Number of failed connection tries
@@ -63,25 +61,25 @@ public class SseEventBus {
 
 	private final int noOfSendResponseTries;
 
+	private final int clientExpirationInSeconds;
+
 	public SseEventBus(ScheduledExecutorService taskScheduler,
-			int clientExpirationInSeconds, int messageExpirationInSeconds,
-			int schedulerDelayInMilliseconds, int noOfSendResponseTries) {
+			int clientExpirationInSeconds, int schedulerDelayInMilliseconds,
+			int noOfSendResponseTries) {
 
 		this.taskScheduler = taskScheduler;
 		this.noOfSendResponseTries = noOfSendResponseTries;
+		this.clientExpirationInSeconds = clientExpirationInSeconds;
 
-		this.clients = ExpiringMap.builder()
-				.expiration(clientExpirationInSeconds, TimeUnit.SECONDS)
-				.expirationListener(this::expirationListener).build();
-
+		this.clients = new ConcurrentHashMap<>();
 		this.failedClients = new ConcurrentHashMap<>();
 		this.eventSubscribers = new ConcurrentHashMap<>();
-
-		this.pendingClientEvents = ExpiringMap.builder()
-				.expiration(messageExpirationInSeconds, TimeUnit.SECONDS).build();
+		this.pendingClientEvents = new ConcurrentHashMap<>();
 
 		taskScheduler.scheduleWithFixedDelay(this::eventLoop, 0,
 				schedulerDelayInMilliseconds, TimeUnit.MILLISECONDS);
+		taskScheduler.scheduleAtFixedRate(this::cleanUpClients, 0,
+				clientExpirationInSeconds, TimeUnit.SECONDS);
 	}
 
 	@PreDestroy
@@ -120,8 +118,12 @@ public class SseEventBus {
 		return emitter;
 	}
 
-	private void expirationListener(final String clientId,
-			@SuppressWarnings("unused") final SseEmitter emitter) {
+	public void registerClient(String clientId, SseEmitter emitter) {
+		this.clients.put(clientId, new SseClient(emitter));
+		this.failedClients.remove(clientId);
+	}
+
+	public void unregisterClient(String clientId) {
 		Set<String> emptyEvents = new HashSet<>();
 		for (Map.Entry<String, Set<String>> entry : this.eventSubscribers.entrySet()) {
 			Set<String> clientIds = entry.getValue();
@@ -133,15 +135,6 @@ public class SseEventBus {
 		emptyEvents.forEach(this.eventSubscribers::remove);
 		this.failedClients.remove(clientId);
 		this.pendingClientEvents.remove(clientId);
-	}
-
-	public void registerClient(String clientId, SseEmitter emitter) {
-		this.clients.put(clientId, emitter);
-		this.failedClients.remove(clientId);
-	}
-
-	public void unregisterClient(String clientId) {
-		this.expirationListener(clientId, null);
 		this.clients.remove(clientId);
 	}
 
@@ -165,7 +158,7 @@ public class SseEventBus {
 			}
 		}
 
-		List<SseEvent> clientEvents = this.pendingClientEvents.get(clientIds);
+		List<SseEvent> clientEvents = this.pendingClientEvents.get(clientId);
 		if (clientEvents != null) {
 			Iterator<SseEvent> it = clientEvents.iterator();
 			while (it.hasNext()) {
@@ -175,12 +168,11 @@ public class SseEventBus {
 				}
 			}
 			if (clientEvents.isEmpty()) {
-				this.pendingClientEvents.remove(clientIds);
+				this.pendingClientEvents.remove(clientId);
 			}
 		}
 	}
 
-	@Async
 	@EventListener
 	public void handleEvent(SseEvent event) {
 		if (event.clientIds().isEmpty()) {
@@ -210,31 +202,37 @@ public class SseEventBus {
 	}
 
 	private void eventLoop() {
-		if (this.eventSubscribers.isEmpty()) {
-			return;
-		}
-
-		Iterator<Entry<String, List<SseEvent>>> it = this.pendingClientEvents.entrySet()
-				.iterator();
-		Map<String, List<SseEvent>> failedMessages = new HashMap<>();
-		while (it.hasNext()) {
-			Map.Entry<String, List<SseEvent>> entry = it.next();
-			it.remove();
-			if (!sendMessagesToClient(entry.getKey(), entry.getValue())) {
-				failedMessages.put(entry.getKey(), entry.getValue());
+		try {
+			if (this.eventSubscribers.isEmpty()) {
+				return;
 			}
-		}
-		this.pendingClientEvents.putAll(failedMessages);
 
-		this.failedClients.entrySet().stream()
-				.filter(e -> e.getValue() >= this.noOfSendResponseTries).forEach(e -> {
-					unregisterClient(e.getKey());
-				});
+			Iterator<Entry<String, List<SseEvent>>> it = this.pendingClientEvents
+					.entrySet().iterator();
+			Map<String, List<SseEvent>> failedMessages = new HashMap<>();
+			while (it.hasNext()) {
+				Map.Entry<String, List<SseEvent>> entry = it.next();
+				it.remove();
+				if (!sendMessagesToClient(entry.getKey(), entry.getValue())) {
+					failedMessages.put(entry.getKey(), entry.getValue());
+				}
+			}
+			this.pendingClientEvents.putAll(failedMessages);
+
+			this.failedClients.entrySet().stream()
+					.filter(e -> e.getValue() >= this.noOfSendResponseTries)
+					.forEach(e -> {
+						unregisterClient(e.getKey());
+					});
+		}
+		catch (Exception e) {
+			LogFactory.getLog(getClass()).error("exception in the sse eventbus loop", e);
+		}
 	}
 
 	private boolean sendMessagesToClient(String clientId, List<SseEvent> events) {
-		SseEmitter emitter = this.clients.get(clientId);
-		if (emitter != null) {
+		SseClient client = this.clients.get(clientId);
+		if (client != null) {
 			Map<String, List<SseEvent>> eventNameEvents = events.stream()
 					.collect(Collectors.groupingBy(SseEvent::event));
 
@@ -270,11 +268,12 @@ public class SseEventBus {
 			}
 
 			try {
-				emitter.send(sseBuilder);
+				client.sseEmitter().send(sseBuilder);
+				client.updateLastTransfer();
 				return true;
 			}
 			catch (Exception e) {
-				emitter.completeWithError(e);
+				client.sseEmitter().completeWithError(e);
 				this.failedClients.merge(clientId, 1, (v, vv) -> v + 1);
 				return false;
 			}
@@ -283,4 +282,19 @@ public class SseEventBus {
 		return true;
 	}
 
+	private void cleanUpClients() {
+		if (!this.clients.isEmpty()) {
+			long expirationTime = System.currentTimeMillis()
+					- this.clientExpirationInSeconds * 1000L;
+			Iterator<Entry<String, SseClient>> it = this.clients.entrySet().iterator();
+			Set<String> staleClients = new HashSet<>();
+			while (it.hasNext()) {
+				Entry<String, SseClient> entry = it.next();
+				if (entry.getValue().lastTransfer() < expirationTime) {
+					staleClients.add(entry.getKey());
+				}
+			}
+			staleClients.forEach(this::unregisterClient);
+		}
+	}
 }

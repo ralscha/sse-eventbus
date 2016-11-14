@@ -337,7 +337,7 @@ public class IntegrationTest {
 	public void testClientExpiration() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName", true);
 		assertThat(clients()).hasSize(1);
-		sleep(12, TimeUnit.SECONDS);
+		sleep(21, TimeUnit.SECONDS);
 		assertThat(clients()).hasSize(0);
 	}
 
@@ -358,7 +358,7 @@ public class IntegrationTest {
 			assertSseResponse(responses.get(i), "event:eventName", "data:payload");
 		}
 
-		sleep(12, TimeUnit.SECONDS);
+		sleep(21, TimeUnit.SECONDS);
 		assertThat(clients()).hasSize(0);
 	}
 

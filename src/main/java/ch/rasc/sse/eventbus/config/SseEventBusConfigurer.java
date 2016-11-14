@@ -29,16 +29,16 @@ public interface SseEventBusConfigurer {
 	/**
 	 * The internal scheduler runs with a fixed delay of this value.
 	 * <p>
-	 * Default: 200 milliseconds
+	 * Default: 100 milliseconds
 	 */
 	default int schedulerDelayInMilliseconds() {
-		return 200;
+		return 100;
 	}
 
 	/**
-	 * Specifies after how many seconds a stale client is removed from the internal
-	 * registry
-	 *
+	 * Number of seconds after the last successful data connection a client is removed
+	 * from the internal registry.
+	 * <p>
 	 * Default: 86 400 seconds (1 day)
 	 */
 	default int clientExpirationInSeconds() {
@@ -46,21 +46,11 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * Specifies after how many seconds a stale message is removed from the internal
-	 * registry
-	 *
-	 * Default: 120 seconds
-	 */
-	default int messageExpirationInSeconds() {
-		return 120;
-	}
-
-	/**
-	 * Number of failed tries to send a response before the client is removed from the
-	 * internal database.
+	 * Number of tries to send a response, before the client is removed from the internal
+	 * registry.
 	 */
 	default int noOfSendResponseTries() {
-		return 20;
+		return 40;
 	}
 
 	/**

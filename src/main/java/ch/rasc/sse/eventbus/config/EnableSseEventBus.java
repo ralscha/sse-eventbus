@@ -42,7 +42,7 @@ import org.springframework.context.annotation.Import;
  * public class Config implements SseEventBusConfigurer {
  * 	&#064;Override
  * 	public int clientExpirationInSeconds() {
- * 		return 5;
+ * 		return 180;
  * 	}
  * }
  * </pre>

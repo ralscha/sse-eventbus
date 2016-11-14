@@ -56,7 +56,6 @@ public class DefaultSseEventBusConfiguration {
 		}
 
 		return new SseEventBus(taskScheduler, config.clientExpirationInSeconds(),
-				config.messageExpirationInSeconds(),
 				config.schedulerDelayInMilliseconds(), config.noOfSendResponseTries());
 	}
 

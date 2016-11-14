@@ -52,11 +52,6 @@ public class SseEventBusTest {
 		}
 
 		@Override
-		public int messageExpirationInSeconds() {
-			return 5;
-		}
-
-		@Override
 		public int noOfSendResponseTries() {
 			return 1;
 		}
@@ -107,14 +102,14 @@ public class SseEventBusTest {
 		SseEmitter se1 = this.eventBus.createSseEmitter("1");
 		SseEmitter se2 = this.eventBus.createSseEmitter("2", 10_000L);
 		assertThat(clients()).containsOnlyKeys("1", "2");
-		assertThat(clients().get("1")).isEqualTo(se1);
-		assertThat(clients().get("2")).isEqualTo(se2);
+		assertThat(clients().get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(clients().get("2").sseEmitter()).isEqualTo(se2);
 		assertThat(eventSubscribers()).isEmpty();
 
 		sleep(1, TimeUnit.SECONDS);
 		assertThat(clients()).containsOnlyKeys("1", "2");
 
-		sleep(5, TimeUnit.SECONDS);
+		sleep(11, TimeUnit.SECONDS);
 		assertThat(clients()).isEmpty();
 	}
 
@@ -127,9 +122,9 @@ public class SseEventBusTest {
 		SseEmitter se3 = this.eventBus.createSseEmitter("3", "one", "three");
 
 		assertThat(clients()).containsOnlyKeys("1", "2", "3");
-		assertThat(clients().get("1")).isEqualTo(se1);
-		assertThat(clients().get("2")).isEqualTo(se2);
-		assertThat(clients().get("3")).isEqualTo(se3);
+		assertThat(clients().get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(clients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(clients().get("3").sseEmitter()).isEqualTo(se3);
 
 		assertThat(eventSubscribers()).containsOnlyKeys("one", "two", "two2", "three");
 		assertThat(eventSubscribers().get("one")).containsExactly("1", "3");
@@ -166,7 +161,7 @@ public class SseEventBusTest {
 		this.eventBus.createSseEmitter("2", "two", "two2");
 		this.eventBus.createSseEmitter("3", "one", "three");
 		assertThat(eventSubscribers()).containsOnlyKeys("one", "two", "two2", "three");
-		sleep(6, TimeUnit.SECONDS);
+		sleep(11, TimeUnit.SECONDS);
 		assertThat(clients()).isEmpty();
 		assertThat(eventSubscribers()).isEmpty();
 	}
@@ -245,8 +240,8 @@ public class SseEventBusTest {
 		assertThat(pendingClientEvents()).isEmpty();
 	}
 
-	private Map<String, SseEmitter> clients() {
-		return (Map<String, SseEmitter>) ReflectionTestUtils.getField(this.eventBus,
+	private Map<String, SseClient> clients() {
+		return (Map<String, SseClient>) ReflectionTestUtils.getField(this.eventBus,
 				"clients");
 	}
 
