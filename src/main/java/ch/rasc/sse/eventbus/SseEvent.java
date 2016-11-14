@@ -15,7 +15,6 @@
  */
 package ch.rasc.sse.eventbus;
 
-import java.util.Collections;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -23,74 +22,117 @@ import javax.annotation.Nullable;
 import org.immutables.value.Value;
 import org.immutables.value.Value.Style.ImplementationVisibility;
 
-@Value.Style(visibility = ImplementationVisibility.PACKAGE)
-@Value.Immutable(copy = false, builder = false)
+@Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE)
+@Value.Immutable
 public interface SseEvent {
 
-	@Value.Parameter
-	@Nullable
+	public static String DEFAULT_EVENT = "message";
+
 	Set<String> clientIds();
 
-	@Value.Parameter
-	String name();
+	@Value.Default
+	default String event() {
+		return DEFAULT_EVENT;
+	}
 
-	@Value.Parameter
-	@Nullable
-	String data();
+	@Value.Default
+	default String data() {
+		return "";
+	}
 
 	/**
-	 * true: combine data with previous unsent messages false: overwrite previous unsent
-	 * messages
+	 * true: combine event with previous unsent messages <br>
+	 * false: overwrite previous unsent messages (default)
 	 */
-	@Value.Parameter
-	boolean combine();
-
-	public static SseEvent all(String name) {
-		return ImmutableSseEvent.of(Collections.emptySet(), name, "", false);
+	@Value.Default
+	default boolean combine() {
+		return false;
 	}
 
-	public static SseEvent all(String name, String data) {
-		return ImmutableSseEvent.of(Collections.emptySet(), name, nullToEmpty(data),
-				false);
+	@Nullable
+	Long retry();
+
+	@Nullable
+	String id();
+
+	@Nullable
+	String comment();
+
+	/**
+	 * Creates a SseEvent that just the data
+	 */
+	public static SseEvent ofData(String data) {
+		return SseEvent.builder().data(data).build();
 	}
 
-	public static SseEvent all(String name, String data, boolean combine) {
-		return ImmutableSseEvent.of(Collections.emptySet(), name, nullToEmpty(data),
-				combine);
+	/**
+	 * Creates a SseEvent that contains an event and an empty data
+	 */
+	public static SseEvent ofEvent(String event) {
+		return SseEvent.builder().event(event).build();
 	}
 
-	public static SseEvent one(String clientId, String name) {
-		return ImmutableSseEvent.of(Collections.singleton(clientId), name, "", false);
+	/**
+	 * Creates a SseEvent that just contains an event and data
+	 */
+	public static SseEvent of(String event, String data) {
+		return SseEvent.builder().event(event).data(data).build();
 	}
 
-	public static SseEvent one(String clientId, String name, String data) {
-		return ImmutableSseEvent.of(Collections.singleton(clientId), name,
-				nullToEmpty(data), false);
+	public static Builder builder() {
+		return new Builder();
 	}
 
-	public static SseEvent one(String clientId, String name, String data,
-			boolean combine) {
-		return ImmutableSseEvent.of(Collections.singleton(clientId), name,
-				nullToEmpty(data), combine);
+	public static final class Builder extends ImmutableSseEvent.Builder {
+		// nothing here
 	}
 
-	public static SseEvent group(Set<String> clientIds, String name) {
-		return ImmutableSseEvent.of(clientIds, name, "", false);
-	}
-
-	public static SseEvent group(Set<String> clientIds, String name, String data) {
-		return ImmutableSseEvent.of(clientIds, name, nullToEmpty(data), false);
-	}
-
-	public static SseEvent group(Set<String> clientIds, String name, String data,
-			boolean combine) {
-		return ImmutableSseEvent.of(clientIds, name, nullToEmpty(data), combine);
-	}
-
-	static String nullToEmpty(String data) {
-		if (data == null) {
-			return "";
-		}
-		return data;
-	}
+	// public static SseEvent all(String name) {
+	// return ImmutableSseEvent.of(Collections.emptySet(), name, "", false);
+	// }
+	//
+	// public static SseEvent all(String name, String data) {
+	// return ImmutableSseEvent.of(Collections.emptySet(), name, nullToEmpty(data),
+	// false);
+	// }
+	//
+	// public static SseEvent all(String name, String data, boolean combine) {
+	// return ImmutableSseEvent.of(Collections.emptySet(), name, nullToEmpty(data),
+	// combine);
+	// }
+	//
+	// public static SseEvent one(String clientId, String name) {
+	// return ImmutableSseEvent.of(Collections.singleton(clientId), name, "", false);
+	// }
+	//
+	// public static SseEvent one(String clientId, String name, String data) {
+	// return ImmutableSseEvent.of(Collections.singleton(clientId), name,
+	// nullToEmpty(data), false);
+	// }
+	//
+	// public static SseEvent one(String clientId, String name, String data,
+	// boolean combine) {
+	// return ImmutableSseEvent.of(Collections.singleton(clientId), name,
+	// nullToEmpty(data), combine);
+	// }
+	//
+	// public static SseEvent group(Set<String> clientIds, String name) {
+	// return ImmutableSseEvent.of(clientIds, name, "", false);
+	// }
+	//
+	// public static SseEvent group(Set<String> clientIds, String name, String data) {
+	// return ImmutableSseEvent.of(clientIds, name, nullToEmpty(data), false);
+	// }
+	//
+	// public static SseEvent group(Set<String> clientIds, String name, String data,
+	// boolean combine) {
+	// return ImmutableSseEvent.of(clientIds, name, nullToEmpty(data), combine);
+	// }
+	//
+	// static String nullToEmpty(String data) {
+	// if (data == null) {
+	// return "";
+	// }
+	// return data;
+	// }
 }

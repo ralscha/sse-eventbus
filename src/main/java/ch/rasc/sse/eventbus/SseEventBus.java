@@ -16,6 +16,7 @@
 package ch.rasc.sse.eventbus;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 import javax.annotation.PreDestroy;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -38,9 +40,9 @@ import net.jodah.expiringmap.ExpiringMap;
 public class SseEventBus {
 
 	/**
-	 * Client Id -> SseClient
+	 * Client Id -> SseEmitter
 	 */
-	private final Map<String, SseClient> clients;
+	private final Map<String, SseEmitter> clients;
 
 	/**
 	 * Client Id -> Number of failed connection tries
@@ -51,11 +53,6 @@ public class SseEventBus {
 	 * EventName -> Collection of Client Ids
 	 */
 	private final Map<String, Set<String>> eventSubscribers;
-
-	/**
-	 * EventName -> List of SseEvent
-	 */
-	private final Map<String, List<SseEvent>> pendingAllEvents;
 
 	/**
 	 * Client Id -> List of EventBusEvents
@@ -80,8 +77,6 @@ public class SseEventBus {
 		this.failedClients = new ConcurrentHashMap<>();
 		this.eventSubscribers = new ConcurrentHashMap<>();
 
-		this.pendingAllEvents = ExpiringMap.builder()
-				.expiration(messageExpirationInSeconds, TimeUnit.SECONDS).build();
 		this.pendingClientEvents = ExpiringMap.builder()
 				.expiration(messageExpirationInSeconds, TimeUnit.SECONDS).build();
 
@@ -114,7 +109,7 @@ public class SseEventBus {
 	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
-		registerClient(SseClient.of(clientId, emitter));
+		registerClient(clientId, emitter);
 
 		if (events != null && events.length > 0) {
 			for (String event : events) {
@@ -126,7 +121,7 @@ public class SseEventBus {
 	}
 
 	private void expirationListener(final String clientId,
-			@SuppressWarnings("unused") final SseClient client) {
+			@SuppressWarnings("unused") final SseEmitter emitter) {
 		Set<String> emptyEvents = new HashSet<>();
 		for (Map.Entry<String, Set<String>> entry : this.eventSubscribers.entrySet()) {
 			Set<String> clientIds = entry.getValue();
@@ -140,14 +135,21 @@ public class SseEventBus {
 		this.pendingClientEvents.remove(clientId);
 	}
 
-	public void registerClient(SseClient client) {
-		this.clients.put(client.id(), client);
-		this.failedClients.remove(client.id());
+	public void registerClient(String clientId, SseEmitter emitter) {
+		this.clients.put(clientId, emitter);
+		this.failedClients.remove(clientId);
 	}
 
 	public void unregisterClient(String clientId) {
 		this.expirationListener(clientId, null);
 		this.clients.remove(clientId);
+	}
+
+	/**
+	 * Subscribe to the default event (message)
+	 */
+	public void subscribe(String clientId) {
+		subscribe(clientId, SseEvent.DEFAULT_EVENT);
 	}
 
 	public void subscribe(String clientId, String event) {
@@ -168,7 +170,7 @@ public class SseEventBus {
 			Iterator<SseEvent> it = clientEvents.iterator();
 			while (it.hasNext()) {
 				SseEvent ebe = it.next();
-				if (ebe.name().equals(event)) {
+				if (ebe.event().equals(event)) {
 					it.remove();
 				}
 			}
@@ -178,25 +180,33 @@ public class SseEventBus {
 		}
 	}
 
+	@Async
 	@EventListener
 	public void handleEvent(SseEvent event) {
 		if (event.clientIds().isEmpty()) {
-			if (event.combine()) {
-				this.pendingAllEvents
-						.computeIfAbsent(event.name(), k -> new ArrayList<>()).add(event);
-			}
-			else {
-				List<SseEvent> events = new ArrayList<>();
-				events.add(event);
-				this.pendingAllEvents.put(event.name(), events);
+			for (String clientId : this.clients.keySet()) {
+				if (isUserSubscribed(clientId, event)) {
+					this.pendingClientEvents
+							.computeIfAbsent(clientId, k -> new ArrayList<>()).add(event);
+				}
 			}
 		}
 		else {
 			for (String clientId : event.clientIds()) {
-				this.pendingClientEvents.computeIfAbsent(clientId, k -> new ArrayList<>())
-						.add(event);
+				if (isUserSubscribed(clientId, event)) {
+					this.pendingClientEvents
+							.computeIfAbsent(clientId, k -> new ArrayList<>()).add(event);
+				}
 			}
 		}
+	}
+
+	private boolean isUserSubscribed(String clientId, SseEvent event) {
+		Set<String> subscribedClients = this.eventSubscribers.get(event.event());
+		if (subscribedClients != null) {
+			return subscribedClients.contains(clientId);
+		}
+		return false;
 	}
 
 	private void eventLoop() {
@@ -204,21 +214,17 @@ public class SseEventBus {
 			return;
 		}
 
-		Iterator<Entry<String, List<SseEvent>>> it = this.pendingAllEvents.entrySet()
+		Iterator<Entry<String, List<SseEvent>>> it = this.pendingClientEvents.entrySet()
 				.iterator();
+		Map<String, List<SseEvent>> failedMessages = new HashMap<>();
 		while (it.hasNext()) {
 			Map.Entry<String, List<SseEvent>> entry = it.next();
-			sendMessagesToAll(entry.getKey(), entry.getValue());
 			it.remove();
-		}
-
-		it = this.pendingClientEvents.entrySet().iterator();
-		while (it.hasNext()) {
-			Map.Entry<String, List<SseEvent>> entry = it.next();
-			if (sendMessagesToClient(entry.getKey(), entry.getValue())) {
-				it.remove();
+			if (!sendMessagesToClient(entry.getKey(), entry.getValue())) {
+				failedMessages.put(entry.getKey(), entry.getValue());
 			}
 		}
+		this.pendingClientEvents.putAll(failedMessages);
 
 		this.failedClients.entrySet().stream()
 				.filter(e -> e.getValue() >= this.noOfSendResponseTries).forEach(e -> {
@@ -227,64 +233,54 @@ public class SseEventBus {
 	}
 
 	private boolean sendMessagesToClient(String clientId, List<SseEvent> events) {
-		SseClient client = this.clients.get(clientId);
-		if (client != null) {
+		SseEmitter emitter = this.clients.get(clientId);
+		if (emitter != null) {
 			Map<String, List<SseEvent>> eventNameEvents = events.stream()
-					.collect(Collectors.groupingBy(SseEvent::name));
+					.collect(Collectors.groupingBy(SseEvent::event));
 
 			SseEventBuilder sseBuilder = SseEmitter.event();
 			for (Entry<String, List<SseEvent>> ene : eventNameEvents.entrySet()) {
-				sseBuilder.name(ene.getKey());
-				List<String> datas = new ArrayList<>();
-
+				List<SseEvent> datas = new ArrayList<>();
 				for (SseEvent evt : ene.getValue()) {
 					if (!evt.combine()) {
 						datas.clear();
 					}
-					datas.add(evt.data());
+					datas.add(evt);
 				}
 
-				datas.forEach(sseBuilder::data);
+				if (!ene.getKey().equals(SseEvent.DEFAULT_EVENT)) {
+					sseBuilder.name(ene.getKey());
+				}
+
+				for (SseEvent evt : datas) {
+					if (evt.id() != null) {
+						sseBuilder.id(evt.id());
+					}
+
+					if (evt.retry() != null) {
+						sseBuilder.reconnectTime(evt.retry());
+					}
+
+					if (evt.comment() != null) {
+						sseBuilder.comment(evt.comment());
+					}
+
+					sseBuilder.data(evt.data());
+				}
 			}
 
 			try {
-				client.emitter().send(sseBuilder);
+				emitter.send(sseBuilder);
 				return true;
 			}
 			catch (Exception e) {
-				client.emitter().completeWithError(e);
+				emitter.completeWithError(e);
 				this.failedClients.merge(clientId, 1, (v, vv) -> v + 1);
 				return false;
 			}
 
 		}
 		return true;
-	}
-
-	private void sendMessagesToAll(String eventName, List<SseEvent> events) {
-		Set<String> clientIds = this.eventSubscribers.get(eventName);
-		if (clientIds == null || clientIds.isEmpty()) {
-			return;
-		}
-
-		SseEventBuilder sseBuilder = SseEmitter.event().name(eventName);
-		events.stream().map(SseEvent::data).forEach(sseBuilder::data);
-
-		for (Map.Entry<String, SseClient> entry : this.clients.entrySet()) {
-			SseClient client = entry.getValue();
-			try {
-				client.emitter().send(sseBuilder);
-			}
-			catch (Exception e) {
-				client.emitter().completeWithError(e);
-				this.failedClients.merge(entry.getKey(), 1, (v, vv) -> v + 1);
-
-				this.pendingClientEvents
-						.computeIfAbsent(client.id(), k -> new ArrayList<>())
-						.addAll(events);
-			}
-		}
-
 	}
 
 }
