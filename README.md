@@ -1,4 +1,3 @@
-##sse-eventbus
 
 [![Build Status](https://api.travis-ci.org/ralscha/sse-eventbus.png)](https://travis-ci.org/ralscha/sse-eventbus)
 
@@ -11,6 +10,10 @@
 		<version>1.0.0-SNAPSHOT</version>
 	</dependency>
 ```
+
+## Demo
+You find a simple demo application here:
+https://github.com/ralscha/sse-eventbus-demo
 
 ## Changelog
 
