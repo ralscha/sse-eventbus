@@ -9,6 +9,23 @@
 		<artifactId>sse-eventbus</artifactId>
 		<version>1.0.0-SNAPSHOT</version>
 	</dependency>
+	
+	...
+	<!-- Needed for a snapshot release -->
+ 	<repositories>
+ 		<repository>
+			<id>sonatype</id>
+			<name>sonatype</name>
+			<url>https://oss.sonatype.org/content/groups/public</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</repository>
+	</repositories>	
+	
 ```
 
 ## Demo
