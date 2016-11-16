@@ -26,7 +26,7 @@ public class TestObject1 {
 	}
 
 	public long getId() {
-		return id;
+		return this.id;
 	}
 
 	public void setId(long id) {
@@ -34,7 +34,7 @@ public class TestObject1 {
 	}
 
 	public String getName() {
-		return name;
+		return this.name;
 	}
 
 	public void setName(String name) {

@@ -68,13 +68,20 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
 		assertSseResponse(sseResponse, "event:eventName", "data:payload");
 	}
-	
+
 	@Test
 	public void testOneClientOneDefaultEvent() throws IOException {
 		Response sseResponse = registerSubscribe("1", "message");
 		this.eventPublisher.publishEvent(SseEvent.ofData("payload"));
 		assertSseResponse(sseResponse, "data:payload");
-	}	
+	}
+
+	@Test
+	public void testRegisterAndSubscribe() throws IOException {
+		Response sseResponse = registerAndSubscribe("1", "message");
+		this.eventPublisher.publishEvent(SseEvent.ofData("regandsub"));
+		assertSseResponse(sseResponse, "data:regandsub");
+	}
 
 	@Test
 	public void testOneClientOneEventEmptyData() throws IOException {
@@ -342,7 +349,7 @@ public class IntegrationTest {
 
 	@Test
 	public void testClientExpiration() throws IOException {
-		Response sseResponse = registerSubscribe("1", "eventName", true);
+		registerSubscribe("1", "eventName", true);
 		assertThat(clients()).hasSize(1);
 		sleep(21, TimeUnit.SECONDS);
 		assertThat(clients()).hasSize(0);
@@ -368,24 +375,25 @@ public class IntegrationTest {
 		sleep(21, TimeUnit.SECONDS);
 		assertThat(clients()).hasSize(0);
 	}
-	
+
 	@Test
 	public void testJsonConverter() throws IOException {
 		Response sseResponse = registerSubscribe("1", "to1");
 		TestObject1 to1 = new TestObject1(101L, "john doe");
-		
+
 		this.eventPublisher.publishEvent(SseEvent.of("to1", to1));
-		assertSseResponse(sseResponse, "event:to1", "data:{\"id\":101,\"name\":\"john doe\"}");
+		assertSseResponse(sseResponse, "event:to1",
+				"data:{\"id\":101,\"name\":\"john doe\"}");
 	}
-	
+
 	@Test
 	public void testCustomConverter() throws IOException {
 		Response sseResponse = registerSubscribe("2", "message");
 		TestObject2 to2 = new TestObject2(999L, "sample inc.");
-		
+
 		this.eventPublisher.publishEvent(SseEvent.ofDataObject(to2));
 		assertSseResponse(sseResponse, "data:999,sample inc.");
-	}	
+	}
 
 	private String testUrl(String path) {
 		return "http://localhost:" + this.port + path;
@@ -448,13 +456,12 @@ public class IntegrationTest {
 		return longPollResponse;
 	}
 
-	private Response registerSubscribeOne(String clientId, String eventName)
+	private Response registerAndSubscribe(String clientId, String eventName)
 			throws IOException {
 		OkHttpClient client = createHttpClient();
 		Request request = new Request.Builder().get()
 				.url(testUrl("/register/" + clientId + "/" + eventName)).build();
-		Response longPollResponse = client.newCall(request).execute();
-		return longPollResponse;
+		return client.newCall(request).execute();
 	}
 
 	private static void sleep(long value, TimeUnit timeUnit) {

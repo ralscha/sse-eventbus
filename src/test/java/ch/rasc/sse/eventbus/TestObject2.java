@@ -26,7 +26,7 @@ public class TestObject2 {
 	}
 
 	public long getId() {
-		return id;
+		return this.id;
 	}
 
 	public void setId(long id) {
@@ -34,7 +34,7 @@ public class TestObject2 {
 	}
 
 	public String getCustomer() {
-		return customer;
+		return this.customer;
 	}
 
 	public void setCustomer(String customer) {

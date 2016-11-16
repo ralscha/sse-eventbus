@@ -35,11 +35,10 @@ public class TestController {
 		return this.eventBus.createSseEmitter(id, 3_000L);
 	}
 
-	@ResponseBody
 	@GetMapping("/register/{id}/{event}")
 	public SseEmitter eventbus(@PathVariable("id") String id,
 			@PathVariable("event") String event) {
-		return this.eventBus.createSseEmitter(id, event.split(","));
+		return this.eventBus.createSseEmitter(id, 3_000L, event.split(","));
 	}
 
 	@ResponseBody

@@ -33,7 +33,7 @@ import org.springframework.context.annotation.Import;
  * }
  * </pre>
  * <p>
- * To customize the library a configuration class can implement the interface
+ * To customise the library a configuration class can implement the interface
  * {@link SseEventBusConfigurer} and override certain methods.
  *
  * <pre class="code">

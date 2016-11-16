@@ -32,15 +32,15 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 	@Bean
 	public DataObjectConverter testObject2Converter() {
 		return new DataObjectConverter() {
-			
+
 			@Override
 			public boolean supports(Object object) {
 				return object instanceof TestObject2;
 			}
-			
+
 			@Override
 			public String convert(Object object) {
-				TestObject2 to = (TestObject2)object;
+				TestObject2 to = (TestObject2) object;
 				return to.getId() + "," + to.getCustomer();
 			}
 		};
