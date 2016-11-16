@@ -69,6 +69,14 @@ public interface SseEvent {
 	}
 
 	/**
+	 * Creates a SseEvent that just contains the data. The object will be converted into a
+	 * string by a converter
+	 */
+	public static SseEvent ofDataObject(Object dataObject) {
+		return SseEvent.builder().dataObject(dataObject).build();
+	}
+
+	/**
 	 * Creates a SseEvent that contains an event and an empty data
 	 */
 	public static SseEvent ofEvent(String event) {
@@ -80,6 +88,14 @@ public interface SseEvent {
 	 */
 	public static SseEvent of(String event, String data) {
 		return SseEvent.builder().event(event).data(data).build();
+	}
+
+	/**
+	 * Creates a SseEvent that just contains an event and a object. The object will be
+	 * converted into a string by a converter
+	 */
+	public static SseEvent of(String event, Object dataObject) {
+		return SseEvent.builder().event(event).dataObject(dataObject).build();
 	}
 
 	public static Builder builder() {
