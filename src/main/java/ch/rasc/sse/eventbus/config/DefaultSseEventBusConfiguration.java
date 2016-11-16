@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -22,6 +24,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import ch.rasc.sse.eventbus.DataObjectConverter;
+import ch.rasc.sse.eventbus.DefaultDataObjectConverter;
+import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
 import ch.rasc.sse.eventbus.SseEventBus;
 
 /**
@@ -39,6 +46,12 @@ public class DefaultSseEventBusConfiguration {
 	@Autowired(required = false)
 	private SseEventBusConfigurer configurer;
 
+	@Autowired(required = false)
+	private ObjectMapper objectMapper;
+
+	@Autowired(required = false)
+	private List<DataObjectConverter> dataObjectConverters;
+
 	@Bean
 	public SseEventBus eventBus() {
 		SseEventBusConfigurer config = this.configurer;
@@ -55,8 +68,25 @@ public class DefaultSseEventBusConfiguration {
 			taskScheduler = Executors.newSingleThreadScheduledExecutor();
 		}
 
-		return new SseEventBus(taskScheduler, config.clientExpirationInSeconds(),
-				config.schedulerDelayInMilliseconds(), config.noOfSendResponseTries());
+		SseEventBus sseEventBus = new SseEventBus(taskScheduler,
+				config.clientExpirationInSeconds(), config.schedulerDelayInMilliseconds(),
+				config.noOfSendResponseTries());
+
+		List<DataObjectConverter> converters = this.dataObjectConverters;
+		if (converters == null) {
+			converters = new ArrayList<>();
+		}
+
+		if (this.objectMapper != null) {
+			converters.add(new JacksonDataObjectConverter(this.objectMapper));
+		}
+		else {
+			converters.add(new DefaultDataObjectConverter());
+		}
+
+		sseEventBus.setDataObjectConverters(converters);
+
+		return sseEventBus;
 	}
 
 }

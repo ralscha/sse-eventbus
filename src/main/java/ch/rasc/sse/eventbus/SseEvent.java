@@ -40,6 +40,9 @@ public interface SseEvent {
 		return "";
 	}
 
+	@Nullable
+	Object dataObject();
+
 	/**
 	 * true: combine event with previous unsent messages <br>
 	 * false: overwrite previous unsent messages (default)
@@ -59,7 +62,7 @@ public interface SseEvent {
 	String comment();
 
 	/**
-	 * Creates a SseEvent that just the data
+	 * Creates a SseEvent that just contains the data
 	 */
 	public static SseEvent ofData(String data) {
 		return SseEvent.builder().data(data).build();

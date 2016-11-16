@@ -59,9 +59,11 @@ public class SseEventBus {
 
 	private final ScheduledExecutorService taskScheduler;
 
-	private final int noOfSendResponseTries;
+	private int noOfSendResponseTries;
 
-	private final int clientExpirationInSeconds;
+	private int clientExpirationInSeconds;
+
+	private List<DataObjectConverter> dataObjectConverters;
 
 	public SseEventBus(ScheduledExecutorService taskScheduler,
 			int clientExpirationInSeconds, int schedulerDelayInMilliseconds,
@@ -263,7 +265,18 @@ public class SseEventBus {
 						sseBuilder.comment(evt.comment());
 					}
 
-					sseBuilder.data(evt.data());
+					if (evt.dataObject() != null) {
+						String convertedValue = convertObject(evt.dataObject());
+						if (convertedValue != null) {
+							sseBuilder.data(convertedValue);
+						}
+						else {
+							sseBuilder.data(evt.data());
+						}
+					}
+					else {
+						sseBuilder.data(evt.data());
+					}
 				}
 			}
 
@@ -282,6 +295,17 @@ public class SseEventBus {
 		return true;
 	}
 
+	private String convertObject(Object dataObject) {
+		if (this.dataObjectConverters != null) {
+			for (DataObjectConverter converter : this.dataObjectConverters) {
+				if (converter.supports(dataObject)) {
+					return converter.convert(dataObject);
+				}
+			}
+		}
+		return null;
+	}
+
 	private void cleanUpClients() {
 		if (!this.clients.isEmpty()) {
 			long expirationTime = System.currentTimeMillis()
@@ -297,4 +321,29 @@ public class SseEventBus {
 			staleClients.forEach(this::unregisterClient);
 		}
 	}
+
+	public List<DataObjectConverter> getDataObjectConverters() {
+		return this.dataObjectConverters;
+	}
+
+	public void setDataObjectConverters(List<DataObjectConverter> dataObjectConverters) {
+		this.dataObjectConverters = dataObjectConverters;
+	}
+
+	public int getNoOfSendResponseTries() {
+		return this.noOfSendResponseTries;
+	}
+
+	public void setNoOfSendResponseTries(int noOfSendResponseTries) {
+		this.noOfSendResponseTries = noOfSendResponseTries;
+	}
+
+	public int getClientExpirationInSeconds() {
+		return this.clientExpirationInSeconds;
+	}
+
+	public void setClientExpirationInSeconds(int clientExpirationInSeconds) {
+		this.clientExpirationInSeconds = clientExpirationInSeconds;
+	}
+
 }
