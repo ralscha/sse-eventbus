@@ -15,8 +15,12 @@
  */
 package ch.rasc.sse.eventbus.config;
 
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+
+import ch.rasc.sse.eventbus.ClientEvent;
 
 /**
  * Defines methods for configuring the SSE Event Bus library.
@@ -27,12 +31,13 @@ import java.util.concurrent.ScheduledExecutorService;
 public interface SseEventBusConfigurer {
 
 	/**
-	 * The internal scheduler runs with a fixed delay of this value.
+	 * Fixed delay in milliseconds the internal error queue job runs. This job re-submits
+	 * failed events.
 	 * <p>
-	 * Default: 100 milliseconds
+	 * Default: 500 milliseconds
 	 */
 	default int schedulerDelayInMilliseconds() {
-		return 100;
+		return 500;
 	}
 
 	/**
@@ -54,14 +59,21 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * A task scheduler that schedules the interal event loop that sends the sse messages
-	 * to the clients.
+	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
-	 * {@link Executors#newSingleThreadScheduledExecutor()}
+	 * {@link Executors#newScheduledThreadPool(2)}
 	 */
 	default ScheduledExecutorService taskScheduler() {
-		return null;
+		return Executors.newScheduledThreadPool(2);
+	}
+	
+	default BlockingQueue<ClientEvent> errorQueue() {
+		return new LinkedBlockingQueue<>();
+	}
+
+	default BlockingQueue<ClientEvent> sendQueue() {
+		return new LinkedBlockingQueue<>();
 	}
 
 }

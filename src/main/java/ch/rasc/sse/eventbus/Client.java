@@ -17,15 +17,21 @@ package ch.rasc.sse.eventbus;
 
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-public class SseClient {
+class Client {
+	private final String id;
 
-	private final SseEmitter sseEmitter;
+	private SseEmitter sseEmitter;
 
 	private long lastTransfer;
 
-	SseClient(SseEmitter sseEmitter) {
+	Client(String id, SseEmitter sseEmitter) {
+		this.id = id;
 		this.sseEmitter = sseEmitter;
 		this.lastTransfer = System.currentTimeMillis();
+	}
+
+	public String getId() {
+		return this.id;
 	}
 
 	long lastTransfer() {
@@ -38,6 +44,10 @@ public class SseClient {
 
 	SseEmitter sseEmitter() {
 		return this.sseEmitter;
+	}
+
+	public void updateEmitter(SseEmitter emitter) {
+		this.sseEmitter = emitter;
 	}
 
 }

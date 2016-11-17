@@ -131,7 +131,8 @@ public class IntegrationTest {
 		Response sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload2"));
-		assertSseResponse(sseResponse, "event:eventName", "data:payload2");
+		assertSseResponse(sseResponse, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
 	}
 
 	@Test
@@ -145,7 +146,8 @@ public class IntegrationTest {
 				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 
-		assertSseResponse(sseResponse, "event:eventName", "data:payload2");
+		assertSseResponse(sseResponse, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
 	}
 
 	@Test
@@ -154,45 +156,13 @@ public class IntegrationTest {
 		Response sseResponse = registerSubscribe("1", "eventName");
 
 		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("1")
-				.event("eventName").data("payload1").combine(true).build();
+				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
 		sseEvent = SseEvent.builder().addClientId("2").event("eventName").data("payload2")
-				.combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-		assertSseResponse(sseResponse, "event:eventName", "data:payload1");
-	}
-
-	@Test
-	public void testOneClientTwoEventsCombine() throws IOException {
-		Response sseResponse = registerSubscribe("1", "eventName");
-
-		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
-				.data("payload1").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseEvent = SseEvent.builder().event("eventName").data("payload2").combine(true)
 				.build();
 		this.eventPublisher.publishEvent(sseEvent);
-
-		assertSseResponse(sseResponse, "event:eventName", "data:payload1",
-				"data:payload2");
-	}
-
-	@Test
-	public void testOneClientTwoDirectEventsCombine() throws IOException {
-		Response sseResponse = registerSubscribe("1", "eventName");
-
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("1")
-				.event("eventName").data("payload1").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseEvent = SseEvent.builder().addClientId("1").event("eventName").data("payload2")
-				.combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		assertSseResponse(sseResponse, "event:eventName", "data:payload1",
-				"data:payload2");
+		assertSseResponse(sseResponse, "event:eventName", "data:payload1");
 	}
 
 	@Test
@@ -210,27 +180,10 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload2"));
-		assertSseResponse(sseResponse1, "event:eventName", "data:payload2");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
-	}
-
-	@Test
-	public void testTwoClientsTwoAllEventCombine() throws IOException {
-		Response sseResponse1 = registerSubscribe("1", "eventName");
-		Response sseResponse2 = registerSubscribe("2", "eventName");
-
-		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
-				.data("payload1").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseEvent = SseEvent.builder().event("eventName").data("payload2").combine(true)
-				.build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		assertSseResponse(sseResponse1, "event:eventName", "data:payload1",
-				"data:payload2");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload1",
-				"data:payload2");
+		assertSseResponse(sseResponse1, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
 	}
 
 	@Test
@@ -239,33 +192,16 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 
 		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2")
-				.event("eventName").data("payload1").combine(false).build();
+				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
 		sseEvent = SseEvent.builder().addClientId("2").event("eventName").data("payload2")
-				.combine(false).build();
+				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 
 		assertSseResponse(sseResponse1, "");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
-	}
-
-	@Test
-	public void testTwoClientsTwoDirectEventCombineToOneOfThem() throws IOException {
-		Response sseResponse1 = registerSubscribe("1", "eventName");
-		Response sseResponse2 = registerSubscribe("2", "eventName");
-
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2")
-				.event("eventName").data("payload1").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseEvent = SseEvent.builder().addClientId("2").event("eventName").data("payload2")
-				.combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		assertSseResponse(sseResponse1, "");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload1",
-				"data:payload2");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
 	}
 
 	@Test
@@ -275,35 +211,16 @@ public class IntegrationTest {
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
 		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2", "3")
-				.event("eventName").data("payload1").combine(false).build();
+				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addClientId("2", "3").event("eventName")
-				.data("payload2").combine(false).build();
+				.data("payload2").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse1, "");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
-		assertSseResponse(sseResponse3, "event:eventName", "data:payload2");
-	}
-
-	@Test
-	public void testThreeClientsGroupEventCombineToTwoOfThem() throws IOException {
-		Response sseResponse1 = registerSubscribe("1", "eventName");
-		Response sseResponse2 = registerSubscribe("2", "eventName");
-		Response sseResponse3 = registerSubscribe("3", "eventName");
-
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2", "3")
-				.event("eventName").data("payload1").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseEvent = SseEvent.builder().addClientId("2", "3").event("eventName")
-				.data("payload2").combine(true).build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		assertSseResponse(sseResponse1, "");
-		assertSseResponse(sseResponse2, "event:eventName", "data:payload1",
-				"data:payload2");
-		assertSseResponse(sseResponse3, "event:eventName", "data:payload1",
-				"data:payload2");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
+		assertSseResponse(sseResponse3, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
 	}
 
 	@Test
@@ -315,32 +232,30 @@ public class IntegrationTest {
 		assertThat(clients()).hasSize(1);
 
 		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
-				.data("payload1").combine(true).build();
+				.data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload2").combine(true)
-				.build();
+		sseEvent = SseEvent.builder().event("eventName").data("payload2").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload3").combine(true)
-				.build();
+		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
 		sseResponse = registerSubscribe("1", "eventName");
-		assertSseResponse(sseResponse, "event:eventName", "data:payload1",
-				"data:payload2", "data:payload3");
+		assertSseResponse(sseResponse, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2", "", "event:eventName",
+				"data:payload3");
 		assertThat(clients()).hasSize(1);
 
-		sseEvent = SseEvent.builder().event("eventName").data("payload4").combine(false)
-				.build();
+		sseEvent = SseEvent.builder().event("eventName").data("payload4").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload5").combine(false)
-				.build();
+		sseEvent = SseEvent.builder().event("eventName").data("payload5").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload6").combine(false)
-				.build();
+		sseEvent = SseEvent.builder().event("eventName").data("payload6").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
 		sseResponse = registerSubscribe("1", "eventName");
-		assertSseResponse(sseResponse, "event:eventName", "data:payload6");
+		assertSseResponse(sseResponse, "event:eventName", "data:payload4", "",
+				"event:eventName", "data:payload5", "", "event:eventName",
+				"data:payload6");
 		assertThat(clients()).hasSize(1);
 
 		this.eventBus.unregisterClient("1");

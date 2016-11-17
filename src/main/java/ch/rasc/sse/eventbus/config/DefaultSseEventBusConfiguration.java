@@ -17,8 +17,6 @@ package ch.rasc.sse.eventbus.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -60,17 +58,7 @@ public class DefaultSseEventBusConfiguration {
 				/* nothing_here */ };
 		}
 
-		ScheduledExecutorService taskScheduler;
-		if (config.taskScheduler() != null) {
-			taskScheduler = config.taskScheduler();
-		}
-		else {
-			taskScheduler = Executors.newSingleThreadScheduledExecutor();
-		}
-
-		SseEventBus sseEventBus = new SseEventBus(taskScheduler,
-				config.clientExpirationInSeconds(), config.schedulerDelayInMilliseconds(),
-				config.noOfSendResponseTries());
+		SseEventBus sseEventBus = new SseEventBus(config);
 
 		List<DataObjectConverter> converters = this.dataObjectConverters;
 		if (converters == null) {

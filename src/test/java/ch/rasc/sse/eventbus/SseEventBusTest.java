@@ -17,7 +17,6 @@ package ch.rasc.sse.eventbus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -166,93 +165,14 @@ public class SseEventBusTest {
 		assertThat(eventSubscribers()).isEmpty();
 	}
 
-	@Test
-	public void testSendMessageToAll() {
-		this.eventBus.createSseEmitter("1", "one");
-		assertThat(eventSubscribers()).containsOnlyKeys("one");
-
-		SseEvent ebe = SseEvent.of("one", "payload");
-		this.eventBus.handleEvent(ebe);
-		assertThat(pendingClientEvents()).containsOnlyKeys("1");
-		sleep(250, TimeUnit.MILLISECONDS);
-		assertThat(pendingClientEvents()).isEmpty();
-	}
-
-	@Test
-	public void testSendMessageToOne() {
-		this.eventBus.createSseEmitter("1", "one");
-		assertThat(eventSubscribers()).containsOnlyKeys("one");
-
-		SseEvent ebe = SseEvent.builder().addClientId("1").event("one").data("payload")
-				.build();
-		this.eventBus.handleEvent(ebe);
-		assertThat(pendingClientEvents()).containsOnlyKeys("1");
-		assertThat(pendingClientEvents().get("1")).containsExactly(ebe);
-
-		sleep(250, TimeUnit.MILLISECONDS);
-		assertThat(pendingClientEvents()).isEmpty();
-	}
-
-	@Test
-	public void testSendMessageToOneWithPublisher() {
-		this.eventBus.createSseEmitter("1", "one");
-		assertThat(eventSubscribers()).containsOnlyKeys("one");
-
-		SseEvent ebe = SseEvent.builder().addClientId("1").event("one").data("payload")
-				.build();
-		this.publisher.publishEvent(ebe);
-
-		assertThat(pendingClientEvents()).containsOnlyKeys("1");
-		assertThat(pendingClientEvents().get("1")).containsExactly(ebe);
-
-		sleep(250, TimeUnit.MILLISECONDS);
-		assertThat(pendingClientEvents()).isEmpty();
-	}
-
-	@Test
-	public void testSendMessageToOneUnknown() {
-		this.eventBus.createSseEmitter("1", "one");
-		assertThat(eventSubscribers()).containsOnlyKeys("one");
-
-		SseEvent ebe = SseEvent.builder().addClientId("2").event("one").data("payload")
-				.build();
-		this.eventBus.handleEvent(ebe);
-		assertThat(pendingClientEvents()).isEmpty();
-
-		sleep(250, TimeUnit.MILLISECONDS);
-		assertThat(pendingClientEvents()).isEmpty();
-	}
-
-	@Test
-	public void testSendMessageToGroup() {
-		this.eventBus.createSseEmitter("1", "one");
-		this.eventBus.createSseEmitter("2", "one");
-		assertThat(eventSubscribers()).containsOnlyKeys("one");
-
-		SseEvent ebe = SseEvent.builder().addClientId("1", "2", "3").event("one")
-				.data("payload").build();
-		this.eventBus.handleEvent(ebe);
-		assertThat(pendingClientEvents()).containsOnlyKeys("1", "2");
-		assertThat(pendingClientEvents().get("1")).containsExactly(ebe);
-		assertThat(pendingClientEvents().get("2")).containsExactly(ebe);
-
-		sleep(250, TimeUnit.MILLISECONDS);
-		assertThat(pendingClientEvents()).isEmpty();
-	}
-
-	private Map<String, SseClient> clients() {
-		return (Map<String, SseClient>) ReflectionTestUtils.getField(this.eventBus,
+	private Map<String, Client> clients() {
+		return (Map<String, Client>) ReflectionTestUtils.getField(this.eventBus,
 				"clients");
 	}
 
 	private Map<String, Set<String>> eventSubscribers() {
 		return (Map<String, Set<String>>) ReflectionTestUtils.getField(this.eventBus,
 				"eventSubscribers");
-	}
-
-	private Map<String, List<SseEvent>> pendingClientEvents() {
-		return (Map<String, List<SseEvent>>) ReflectionTestUtils.getField(this.eventBus,
-				"pendingClientEvents");
 	}
 
 	private static void sleep(long value, TimeUnit timeUnit) {

@@ -43,15 +43,6 @@ public interface SseEvent {
 	@Nullable
 	Object dataObject();
 
-	/**
-	 * true: combine event with previous unsent messages <br>
-	 * false: overwrite previous unsent messages (default)
-	 */
-	@Value.Default
-	default boolean combine() {
-		return false;
-	}
-
 	@Nullable
 	Long retry();
 
