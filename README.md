@@ -30,7 +30,7 @@
 ```
 
 ## Demo
-Simple demo application:
+Simple demo application:    
 https://github.com/ralscha/sse-eventbus-demo
 
 
@@ -42,12 +42,9 @@ https://www.html5rocks.com/en/tutorials/eventsource/basics/
 
 ## Browser Support
 SSE is supported in most browsers. The notable exceptions are the browsers from Microsoft IE and Edge. 
-
-Current state of SSE support   
 http://caniuse.com/#feat=eventsource
 
 Fortunately it is possible to polyfill the SSE support where it's missing. 
-Here a list of EventSource polyfills:
 
 * **[EventSource](https://github.com/remy/polyfills/blob/master/EventSource.js)** by Remy Sharp
 * **[jQuery.EventSource](http://github.com/rwldrn/jquery.eventsource)** by Rick Waldron
