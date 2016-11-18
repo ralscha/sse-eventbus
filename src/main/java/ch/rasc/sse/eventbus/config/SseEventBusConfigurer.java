@@ -67,7 +67,7 @@ public interface SseEventBusConfigurer {
 	default ScheduledExecutorService taskScheduler() {
 		return Executors.newScheduledThreadPool(2);
 	}
-	
+
 	default BlockingQueue<ClientEvent> errorQueue() {
 		return new LinkedBlockingQueue<>();
 	}

@@ -15,9 +15,9 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.time.Duration;
+import java.util.Optional;
 import java.util.Set;
-
-import javax.annotation.Nullable;
 
 import org.immutables.value.Value;
 import org.immutables.value.Value.Style.ImplementationVisibility;
@@ -35,58 +35,35 @@ public interface SseEvent {
 		return DEFAULT_EVENT;
 	}
 
-	@Value.Default
-	default String data() {
-		return "";
-	}
+	Object data();
 
-	@Nullable
-	Object dataObject();
+	Optional<Duration> retry();
 
-	@Nullable
-	Long retry();
+	Optional<String> id();
 
-	@Nullable
-	String id();
-
-	@Nullable
-	String comment();
+	Optional<String> comment();
 
 	/**
-	 * Creates a SseEvent that just contains the data
+	 * Creates a SseEvent that just contains the data. The data will be converted when
+	 * it's not a String instance.
 	 */
-	public static SseEvent ofData(String data) {
+	public static SseEvent ofData(Object data) {
 		return SseEvent.builder().data(data).build();
 	}
 
 	/**
-	 * Creates a SseEvent that just contains the data. The object will be converted into a
-	 * string by a converter
-	 */
-	public static SseEvent ofDataObject(Object dataObject) {
-		return SseEvent.builder().dataObject(dataObject).build();
-	}
-
-	/**
-	 * Creates a SseEvent that contains an event and an empty data
+	 * Creates a SseEvent that contains an event and an empty string
 	 */
 	public static SseEvent ofEvent(String event) {
-		return SseEvent.builder().event(event).build();
+		return SseEvent.builder().event(event).data("").build();
 	}
 
 	/**
-	 * Creates a SseEvent that just contains an event and data
+	 * Creates a SseEvent that just contains an event and data. The data will be converted
+	 * when it's not a String instance
 	 */
-	public static SseEvent of(String event, String data) {
+	public static SseEvent of(String event, Object data) {
 		return SseEvent.builder().event(event).data(data).build();
-	}
-
-	/**
-	 * Creates a SseEvent that just contains an event and a object. The object will be
-	 * converted into a string by a converter
-	 */
-	public static SseEvent of(String event, Object dataObject) {
-		return SseEvent.builder().event(event).dataObject(dataObject).build();
 	}
 
 	public static Builder builder() {

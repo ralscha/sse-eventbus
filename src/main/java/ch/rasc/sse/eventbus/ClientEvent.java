@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.time.Duration;
+
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -47,19 +49,11 @@ public class ClientEvent {
 			sseBuilder.name(this.event.event());
 		}
 
-		if (this.event.id() != null) {
-			sseBuilder.id(this.event.id());
-		}
+		this.event.id().ifPresent(sseBuilder::id);
+		this.event.retry().map(Duration::toMillis).ifPresent(sseBuilder::reconnectTime);
+		this.event.comment().ifPresent(sseBuilder::comment);
 
-		if (this.event.retry() != null) {
-			sseBuilder.reconnectTime(this.event.retry());
-		}
-
-		if (this.event.comment() != null) {
-			sseBuilder.comment(this.event.comment());
-		}
-
-		if (this.event.dataObject() != null) {
+		if (this.event.data() != null) {
 			if (this.convertedValue != null) {
 				sseBuilder.data(this.convertedValue);
 			}
@@ -68,7 +62,7 @@ public class ClientEvent {
 			}
 		}
 		else {
-			sseBuilder.data(this.event.data());
+			sseBuilder.data("");
 		}
 
 		return sseBuilder;

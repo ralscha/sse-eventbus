@@ -162,8 +162,8 @@ public class SseEventBus {
 		try {
 
 			String convertedValue = null;
-			if (event.dataObject() != null) {
-				convertedValue = this.convertObject(event.dataObject());
+			if (!(event.data() instanceof String)) {
+				convertedValue = this.convertObject(event.data());
 			}
 
 			if (event.clientIds().isEmpty()) {

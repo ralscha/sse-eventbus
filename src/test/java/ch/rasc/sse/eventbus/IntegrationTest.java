@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -94,8 +95,8 @@ public class IntegrationTest {
 	public void testOneClientOneEventAdditionalInfo() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
 		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
-				.data("the data line").id("123").retry(1000L).comment("the comment")
-				.build();
+				.data("the data line").id("123").retry(Duration.ofMillis(1000L))
+				.comment("the comment").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, "event:eventName", "id:123", "retry:1000",
 				":the comment", "data:the data line");
@@ -306,7 +307,7 @@ public class IntegrationTest {
 		Response sseResponse = registerSubscribe("2", "message");
 		TestObject2 to2 = new TestObject2(999L, "sample inc.");
 
-		this.eventPublisher.publishEvent(SseEvent.ofDataObject(to2));
+		this.eventPublisher.publishEvent(SseEvent.ofData(to2));
 		assertSseResponse(sseResponse, "data:999,sample inc.");
 	}
 
