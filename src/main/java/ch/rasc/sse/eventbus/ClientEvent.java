@@ -53,16 +53,11 @@ public class ClientEvent {
 		this.event.retry().map(Duration::toMillis).ifPresent(sseBuilder::reconnectTime);
 		this.event.comment().ifPresent(sseBuilder::comment);
 
-		if (this.event.data() != null) {
-			if (this.convertedValue != null) {
-				sseBuilder.data(this.convertedValue);
-			}
-			else {
-				sseBuilder.data(this.event.data());
-			}
+		if (this.convertedValue != null) {
+			sseBuilder.data(this.convertedValue);
 		}
 		else {
-			sseBuilder.data("");
+			sseBuilder.data(this.event.data());
 		}
 
 		return sseBuilder;
