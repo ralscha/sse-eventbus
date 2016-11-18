@@ -15,6 +15,7 @@
  */
 package ch.rasc.sse.eventbus.config;
 
+import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -31,28 +32,28 @@ import ch.rasc.sse.eventbus.ClientEvent;
 public interface SseEventBusConfigurer {
 
 	/**
-	 * Fixed delay in milliseconds the internal error queue job runs. This job re-submits
-	 * failed events.
+	 * Specifies the delay between the runs of the internal error queue job. <br>
+	 * This job re-submits failed events.
 	 * <p>
 	 * Default: 500 milliseconds
 	 */
-	default int schedulerDelayInMilliseconds() {
-		return 500;
+	default Duration schedulerDelay() {
+		return Duration.ofMillis(500);
 	}
 
 	/**
-	 * Number of seconds after the last successful data connection a client is removed
-	 * from the internal registry.
+	 * Duratin after the last successful data connection, a client is removed from the
+	 * internal registry.
 	 * <p>
-	 * Default: 86 400 seconds (1 day)
+	 * Default: 1 day
 	 */
-	default int clientExpirationInSeconds() {
-		return 86_400;
+	default Duration clientExpiration() {
+		return Duration.ofDays(1);
 	}
 
 	/**
-	 * Number of tries to send a response, before the client is removed from the internal
-	 * registry.
+	 * Number of tries to send a response. When the event cannot be send it will be
+	 * removed from the internal registry.
 	 */
 	default int noOfSendResponseTries() {
 		return 40;

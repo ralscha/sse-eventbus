@@ -17,6 +17,7 @@ package ch.rasc.sse.eventbus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -45,8 +46,8 @@ public class SseEventBusTest {
 	@EnableSseEventBus
 	static class Config implements SseEventBusConfigurer {
 		@Override
-		public int clientExpirationInSeconds() {
-			return 5;
+		public Duration clientExpiration() {
+			return Duration.ofSeconds(5);
 		}
 
 		@Override

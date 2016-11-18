@@ -15,6 +15,7 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -50,7 +51,7 @@ public class SseEventBus {
 
 	private int noOfSendResponseTries;
 
-	private int clientExpirationInSeconds;
+	private Duration clientExpiration;
 
 	private List<DataObjectConverter> dataObjectConverters;
 
@@ -62,7 +63,7 @@ public class SseEventBus {
 
 		this.taskScheduler = configurer.taskScheduler();
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
-		this.clientExpirationInSeconds = configurer.clientExpirationInSeconds();
+		this.clientExpiration = configurer.clientExpiration();
 
 		this.clients = new ConcurrentHashMap<>();
 		this.eventSubscribers = new ConcurrentHashMap<>();
@@ -72,9 +73,9 @@ public class SseEventBus {
 
 		taskScheduler.submit(this::eventLoop);
 		taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
-				configurer.schedulerDelayInMilliseconds(), TimeUnit.MILLISECONDS);
+				configurer.schedulerDelay().toMillis(), TimeUnit.MILLISECONDS);
 		taskScheduler.scheduleAtFixedRate(this::cleanUpClients, 0,
-				clientExpirationInSeconds, TimeUnit.SECONDS);
+				clientExpiration.toMillis(), TimeUnit.MILLISECONDS);
 	}
 
 	@PreDestroy
@@ -265,7 +266,7 @@ public class SseEventBus {
 	private void cleanUpClients() {
 		if (!this.clients.isEmpty()) {
 			long expirationTime = System.currentTimeMillis()
-					- this.clientExpirationInSeconds * 1000L;
+					- this.clientExpiration.toMillis();
 			Iterator<Entry<String, Client>> it = this.clients.entrySet().iterator();
 			Set<String> staleClients = new HashSet<>();
 			while (it.hasNext()) {

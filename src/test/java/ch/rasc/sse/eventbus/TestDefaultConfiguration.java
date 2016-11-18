@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.time.Duration;
+
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
@@ -25,8 +27,8 @@ import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 @EnableSseEventBus
 public class TestDefaultConfiguration implements SseEventBusConfigurer {
 	@Override
-	public int clientExpirationInSeconds() {
-		return 10;
+	public Duration clientExpiration() {
+		return Duration.ofSeconds(10);
 	}
 
 	@Bean
