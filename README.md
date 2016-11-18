@@ -35,24 +35,24 @@ https://github.com/ralscha/sse-eventbus-demo
 
 
 ## More information
-Articles about Server-Sent Events 
-https://hpbn.co/server-sent-events-sse/
+Articles about Server-Sent Events    
+https://hpbn.co/server-sent-events-sse/   
 https://www.html5rocks.com/en/tutorials/eventsource/basics/
 
 
 ## Browser Support
 SSE is supported in most browsers. The notable exceptions are the browsers from Microsoft IE and Edge. 
 
-Current state of SSE support
+Current state of SSE support   
 http://caniuse.com/#feat=eventsource
 
 Fortunately it is possible to polyfill the SSE support where it's missing. 
-Here a list of polyfills for EventSource:
+Here a list of EventSource polyfills:
 
-* **[`EventSource`](https://github.com/remy/polyfills/blob/master/EventSource.js)** by Remy Sharp
-* **[`jQuery.EventSource`](http://github.com/rwldrn/jquery.eventsource)** by Rick Waldron
-* **[`EventSource`](https://github.com/Yaffle/EventSource)** by Yaffle
-* **[`EventSource`](https://github.com/amvtek/EventSource)** by AmvTek
+* **[EventSource](https://github.com/remy/polyfills/blob/master/EventSource.js)** by Remy Sharp
+* **[jQuery.EventSource](http://github.com/rwldrn/jquery.eventsource)** by Rick Waldron
+* **[EventSource](https://github.com/Yaffle/EventSource)** by Yaffle
+* **[EventSource](https://github.com/amvtek/EventSource)** by AmvTek
 
 
 ## Changelog
