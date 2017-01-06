@@ -42,7 +42,7 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * Duratin after the last successful data connection, a client is removed from the
+	 * Duration after the last successful data connection, a client is removed from the
 	 * internal registry.
 	 * <p>
 	 * Default: 1 day
