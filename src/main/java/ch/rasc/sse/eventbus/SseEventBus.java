@@ -169,7 +169,8 @@ public class SseEventBus {
 
 			if (event.clientIds().isEmpty()) {
 				for (Client client : this.clients.values()) {
-					if (isUserSubscribed(client.getId(), event)) {
+					if (!event.excludeClientIds().contains(client.getId())
+							&& isUserSubscribed(client.getId(), event)) {
 						this.sendQueue
 								.put(new ClientEvent(client, event, convertedValue));
 					}

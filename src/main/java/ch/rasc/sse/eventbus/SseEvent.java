@@ -30,6 +30,11 @@ public interface SseEvent {
 
 	Set<String> clientIds();
 
+	/**
+	 * Is ignored when clientIds is not empty
+	 */
+	Set<String> excludeClientIds();
+
 	@Value.Default
 	default String event() {
 		return DEFAULT_EVENT;
