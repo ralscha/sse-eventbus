@@ -225,6 +225,61 @@ public class IntegrationTest {
 	}
 
 	@Test
+	public void testThreeClientsGroupEventToTwoOfThemIgnoreExclude() throws IOException {
+		Response sseResponse1 = registerSubscribe("1", "eventName");
+		Response sseResponse2 = registerSubscribe("2", "eventName");
+		Response sseResponse3 = registerSubscribe("3", "eventName");
+
+		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2", "3")
+				.addExcludeClientId("2", "1").event("eventName").data("payload1").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		sseEvent = SseEvent.builder().addClientId("2", "3")
+				.addExcludeClientId("3", "2", "1").event("eventName").data("payload2")
+				.build();
+		this.eventPublisher.publishEvent(sseEvent);
+		assertSseResponse(sseResponse1, "");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
+		assertSseResponse(sseResponse3, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
+	}
+
+	@Test
+	public void testThreeClientsSendExcludeOne() throws IOException {
+		Response sseResponse1 = registerSubscribe("1", "eventName");
+		Response sseResponse2 = registerSubscribe("2", "eventName");
+		Response sseResponse3 = registerSubscribe("3", "eventName");
+
+		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientId("2")
+				.event("eventName").data("payload1").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		sseEvent = SseEvent.builder().addExcludeClientId("1").event("eventName")
+				.data("payload2").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		assertSseResponse(sseResponse1, "event:eventName", "data:payload1");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
+		assertSseResponse(sseResponse3, "event:eventName", "data:payload1", "",
+				"event:eventName", "data:payload2");
+	}
+
+	@Test
+	public void testThreeClientsSendExcludeMultiple() throws IOException {
+		Response sseResponse1 = registerSubscribe("1", "eventName");
+		Response sseResponse2 = registerSubscribe("2", "eventName");
+		Response sseResponse3 = registerSubscribe("3", "eventName");
+
+		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientId("2", "3")
+				.event("eventName").data("payload1").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		sseEvent = SseEvent.builder().addExcludeClientId("1", "3").event("eventName")
+				.data("payload2").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		assertSseResponse(sseResponse1, "event:eventName", "data:payload1");
+		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
+		assertSseResponse(sseResponse3, "");
+	}
+
+	@Test
 	public void testReconnect() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName", true);
 		sleep(2, TimeUnit.SECONDS);
