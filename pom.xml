@@ -13,7 +13,7 @@
 
 	<groupId>ch.rasc</groupId>
 	<artifactId>sse-eventbus</artifactId>
-	<version>1.0.1-SNAPSHOT</version>
+	<version>1.0.1</version>
 
 	<inceptionYear>2016</inceptionYear>
 
