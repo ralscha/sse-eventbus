@@ -140,12 +140,13 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 ## Changelog
 
 ### 1.0.1 - March 31, 2017
-  * Add support for excluding clients. 
-    ``` SseEvent.builder().addExcludeClientId("2")
-				.event("eventName")
-				.data("payload")
-				.build();
-	```
+  * Add support for excluding clients with the ```addExcludeClientId``` method.
+    ``` 
+    SseEvent.builder().addExcludeClientId("2")
+		      .event("eventName")
+		      .data("payload")
+		      .build();
+    ```
     
 
 ### 1.0.0 - November 19, 2016
