@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.0.0</version>
+		<version>1.0.1</version>
 	</dependency>	
 ```
 
@@ -138,6 +138,15 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ## Changelog
+
+### 1.0.1 - March 31, 2017
+  * Add support for excluding clients. 
+    ``` SseEvent.builder().addExcludeClientId("2")
+				.event("eventName")
+				.data("payload")
+				.build();
+	```
+    
 
 ### 1.0.0 - November 19, 2016
   * Initial release
