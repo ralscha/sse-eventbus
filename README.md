@@ -139,6 +139,9 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 1.1.0 - tbd
+  * Add support for Jackson JSON View
+
 ### 1.0.1 - March 31, 2017
   * Add support for excluding clients with the ```addExcludeClientId``` method.
     ``` 

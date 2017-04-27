@@ -18,14 +18,14 @@ package ch.rasc.sse.eventbus;
 public class DefaultDataObjectConverter implements DataObjectConverter {
 
 	@Override
-	public boolean supports(Object object) {
+	public boolean supports(SseEvent event) {
 		return true;
 	}
 
 	@Override
-	public String convert(Object object) {
-		if (object != null) {
-			return object.toString();
+	public String convert(SseEvent event) {
+		if (event.data() != null) {
+			return event.data().toString();
 		}
 		return null;
 	}

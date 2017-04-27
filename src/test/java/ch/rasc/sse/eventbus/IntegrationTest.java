@@ -366,6 +366,48 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse, "data:999,sample inc.");
 	}
 
+
+	@Test
+	public void testJsonViewNoView() throws IOException {
+		Response sseResponse = registerSubscribe("1", "jsonView1");
+		TestObject3 to3 = new TestObject3();
+		to3.setPrivateData(23);
+		to3.setPublicInfo("this is public");
+		to3.setUuid("abc");
+
+		this.eventPublisher.publishEvent(SseEvent.of("jsonView1", to3));
+		assertSseResponse(sseResponse, "event:jsonView1",
+				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}");
+	}
+
+	@Test
+	public void testJsonViewPublicView() throws IOException {
+		Response sseResponse = registerSubscribe("1", "jsonView1");
+		TestObject3 to3 = new TestObject3();
+		to3.setPrivateData(23);
+		to3.setPublicInfo("this is public");
+		to3.setUuid("abc");
+
+		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PUBLIC.class).build());
+		assertSseResponse(sseResponse, "event:jsonView1",
+				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\"}");
+	}
+
+	@Test
+	public void testJsonViewPrivateView() throws IOException {
+		Response sseResponse = registerSubscribe("1", "jsonView1");
+		TestObject3 to3 = new TestObject3();
+		to3.setPrivateData(23);
+		to3.setPublicInfo("this is public");
+		to3.setUuid("abc");
+
+		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PRIVATE.class).build());
+		assertSseResponse(sseResponse, "event:jsonView1",
+				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}");
+	}
+
+
+
 	private String testUrl(String path) {
 		return "http://localhost:" + this.port + path;
 	}

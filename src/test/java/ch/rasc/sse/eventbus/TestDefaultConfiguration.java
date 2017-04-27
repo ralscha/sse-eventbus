@@ -36,13 +36,13 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 		return new DataObjectConverter() {
 
 			@Override
-			public boolean supports(Object object) {
-				return object instanceof TestObject2;
+			public boolean supports(SseEvent event) {
+				return event.data() instanceof TestObject2;
 			}
 
 			@Override
-			public String convert(Object object) {
-				TestObject2 to = (TestObject2) object;
+			public String convert(SseEvent event) {
+				TestObject2 to = (TestObject2) event.data();
 				return to.getId() + "," + to.getCustomer();
 			}
 		};

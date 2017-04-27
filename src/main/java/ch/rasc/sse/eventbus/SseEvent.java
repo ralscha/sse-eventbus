@@ -35,6 +35,8 @@ public interface SseEvent {
 	 */
 	Set<String> excludeClientIds();
 
+	Optional<Class<?>> jsonView();
+
 	@Value.Default
 	default String event() {
 		return DEFAULT_EVENT;

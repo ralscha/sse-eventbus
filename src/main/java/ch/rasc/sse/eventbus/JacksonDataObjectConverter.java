@@ -27,15 +27,20 @@ public class JacksonDataObjectConverter implements DataObjectConverter {
 	}
 
 	@Override
-	public boolean supports(Object object) {
+	public boolean supports(SseEvent event) {
 		return true;
 	}
 
 	@Override
-	public String convert(Object object) {
-		if (object != null) {
+	public String convert(SseEvent event) {
+		if (event.data() != null) {
 			try {
-				return this.objectMapper.writeValueAsString(object);
+				if (!event.jsonView().isPresent()) {
+					return this.objectMapper.writeValueAsString(event.data());
+				}
+
+				return this.objectMapper.writerWithView(event.jsonView().get())
+						.writeValueAsString(event.data());
 			}
 			catch (JsonProcessingException e) {
 				throw new RuntimeException(e);

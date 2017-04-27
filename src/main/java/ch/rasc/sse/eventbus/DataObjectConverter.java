@@ -17,7 +17,7 @@ package ch.rasc.sse.eventbus;
 
 public interface DataObjectConverter {
 
-	boolean supports(Object object);
+	boolean supports(SseEvent event);
 
-	String convert(Object object);
+	String convert(SseEvent event);
 }

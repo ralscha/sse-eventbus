@@ -49,9 +49,9 @@ public class SseEventBus {
 
 	private final ScheduledExecutorService taskScheduler;
 
-	private int noOfSendResponseTries;
+	private final int noOfSendResponseTries;
 
-	private Duration clientExpiration;
+	private final Duration clientExpiration;
 
 	private List<DataObjectConverter> dataObjectConverters;
 
@@ -71,11 +71,11 @@ public class SseEventBus {
 		this.errorQueue = configurer.errorQueue();
 		this.sendQueue = configurer.sendQueue();
 
-		taskScheduler.submit(this::eventLoop);
-		taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
+		this.taskScheduler.submit(this::eventLoop);
+		this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
 				configurer.schedulerDelay().toMillis(), TimeUnit.MILLISECONDS);
-		taskScheduler.scheduleAtFixedRate(this::cleanUpClients, 0,
-				clientExpiration.toMillis(), TimeUnit.MILLISECONDS);
+		this.taskScheduler.scheduleAtFixedRate(this::cleanUpClients, 0,
+				this.clientExpiration.toMillis(), TimeUnit.MILLISECONDS);
 	}
 
 	@PreDestroy
@@ -164,7 +164,7 @@ public class SseEventBus {
 
 			String convertedValue = null;
 			if (!(event.data() instanceof String)) {
-				convertedValue = this.convertObject(event.data());
+				convertedValue = this.convertObject(event);
 			}
 
 			if (event.clientIds().isEmpty()) {
@@ -253,11 +253,11 @@ public class SseEventBus {
 
 	}
 
-	private String convertObject(Object dataObject) {
+	private String convertObject(SseEvent event) {
 		if (this.dataObjectConverters != null) {
 			for (DataObjectConverter converter : this.dataObjectConverters) {
-				if (converter.supports(dataObject)) {
-					return converter.convert(dataObject);
+				if (converter.supports(event)) {
+					return converter.convert(event);
 				}
 			}
 		}
