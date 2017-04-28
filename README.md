@@ -140,7 +140,14 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 ## Changelog
 
 ### 1.1.0 - tbd
-  * Add support for Jackson JSON View
+  * Add support for Jackson JSON View. 
+    ```SseEvent.builder().event("eventName").data(dataObj).jsonView(JsonViews.PUBLIC.class).build()```
+  To support that the interface ```ch.rasc.sse.eventbus.DataObjectConverter``` changed. 
+  Instead of the ```data``` object the two methods receive the ```SseEvent``` object.
+  1.0.x:  boolean supports(Object object);  String convert(Object object);
+  1.1.x:  boolean supports(SseEvent event); String convert(SseEvent event);
+  To get the data object your code can call ```event.data()```.
+ 
 
 ### 1.0.1 - March 31, 2017
   * Add support for excluding clients with the ```addExcludeClientId``` method.
