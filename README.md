@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.0.1</version>
+		<version>1.1.0</version>
 	</dependency>	
 ```
 
@@ -139,13 +139,13 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
-### 1.1.0 - tbd
+### 1.1.0 - April 28, 2017
   * Add support for Jackson JSON View. 
-    ```SseEvent.builder().event("eventName").data(dataObj).jsonView(JsonViews.PUBLIC.class).build()```
+    ```SseEvent.builder().event("eventName").data(dataObj).jsonView(JsonViews.PUBLIC.class).build()```   
   To support that the interface ```ch.rasc.sse.eventbus.DataObjectConverter``` changed. 
-  Instead of the ```data``` object the two methods receive the ```SseEvent``` object.
-  1.0.x:  boolean supports(Object object);  String convert(Object object);
-  1.1.x:  boolean supports(SseEvent event); String convert(SseEvent event);
+  Instead of the ```data``` object the two methods receive the ```SseEvent``` object.    
+  ```1.0.x:  boolean supports(Object object);  String convert(Object object);```    
+  ```1.1.x:  boolean supports(SseEvent event); String convert(SseEvent event);```    
   To get the data object your code can call ```event.data()```.
  
 
