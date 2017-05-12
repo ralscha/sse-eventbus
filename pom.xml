@@ -7,9 +7,6 @@
 		<version>9</version>
 	</parent>
 
-	<prerequisites>
-		<maven>3.3.9</maven>
-	</prerequisites>
 
 	<groupId>ch.rasc</groupId>
 	<artifactId>sse-eventbus</artifactId>
@@ -95,7 +92,7 @@
 		<dependency>
 		  <groupId>org.assertj</groupId>
 		  <artifactId>assertj-core</artifactId>
-		  <version>3.6.2</version>
+		  <version>3.7.0</version>
 		  <scope>test</scope>
 		</dependency>
 
