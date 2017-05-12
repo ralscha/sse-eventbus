@@ -162,6 +162,20 @@ public class SseEventBusTest {
 		assertThat(eventSubscribers()).isEmpty();
 	}
 
+	@Test
+	public void testMultipleSubscriptions() {
+		this.eventBus.createSseEmitter("1");
+		this.eventBus.subscribe("1", "event1");
+		this.eventBus.subscribe("1", "event1");
+		this.eventBus.subscribe("1", "event1");
+		this.eventBus.subscribe("1", "event1");
+		this.eventBus.subscribe("1", "event1");
+		this.eventBus.subscribe("1", "event2");
+		assertThat(eventSubscribers()).containsOnlyKeys("event1", "event2");
+		assertThat(eventSubscribers().get("event1")).containsExactly("1");
+		assertThat(eventSubscribers().get("event2")).containsExactly("1");
+	}
+
 	private Map<String, Client> clients() {
 		return (Map<String, Client>) ReflectionTestUtils.getField(this.eventBus,
 				"clients");

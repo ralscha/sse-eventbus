@@ -278,6 +278,21 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
 		assertSseResponse(sseResponse3, "");
 	}
+	
+	@Test
+	public void testMultipleSubscriptions() throws IOException {
+		Response sseResponse = registerSubscribe("1", "event1");
+		subscribe("1", "event1");
+		subscribe("1", "event1");
+		subscribe("1", "event1");
+		subscribe("1", "event1");
+		subscribe("1", "event2");
+		
+		ImmutableSseEvent sseEvent = SseEvent.builder()
+				.event("event1").data("payload").build();
+		this.eventPublisher.publishEvent(sseEvent);
+		assertSseResponse(sseResponse, "event:event1", "data:payload");
+	}	
 
 	@Test
 	public void testReconnect() throws IOException {
@@ -467,6 +482,13 @@ public class IntegrationTest {
 				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 				.execute();
 		return longPollResponse;
+	}
+	
+	private void subscribe(String clientId, String eventName) throws IOException {
+		OkHttpClient client = createHttpClient();
+		client.newCall(new Request.Builder().get()
+				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
+				.execute();		
 	}
 
 	private Response registerAndSubscribe(String clientId, String eventName)
