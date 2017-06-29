@@ -40,6 +40,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 @SuppressWarnings("resource")
 @RunWith(SpringRunner.class)
@@ -278,7 +279,7 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse2, "event:eventName", "data:payload2");
 		assertSseResponse(sseResponse3, "");
 	}
-	
+
 	@Test
 	public void testMultipleSubscriptions() throws IOException {
 		Response sseResponse = registerSubscribe("1", "event1");
@@ -287,12 +288,12 @@ public class IntegrationTest {
 		subscribe("1", "event1");
 		subscribe("1", "event1");
 		subscribe("1", "event2");
-		
-		ImmutableSseEvent sseEvent = SseEvent.builder()
-				.event("event1").data("payload").build();
+
+		ImmutableSseEvent sseEvent = SseEvent.builder().event("event1").data("payload")
+				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, "event:event1", "data:payload");
-	}	
+	}
 
 	@Test
 	public void testReconnect() throws IOException {
@@ -381,7 +382,6 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse, "data:999,sample inc.");
 	}
 
-
 	@Test
 	public void testJsonViewNoView() throws IOException {
 		Response sseResponse = registerSubscribe("1", "jsonView1");
@@ -403,7 +403,8 @@ public class IntegrationTest {
 		to3.setPublicInfo("this is public");
 		to3.setUuid("abc");
 
-		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PUBLIC.class).build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3)
+				.jsonView(JsonViews.PUBLIC.class).build());
 		assertSseResponse(sseResponse, "event:jsonView1",
 				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\"}");
 	}
@@ -416,12 +417,11 @@ public class IntegrationTest {
 		to3.setPublicInfo("this is public");
 		to3.setUuid("abc");
 
-		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PRIVATE.class).build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("jsonView1").data(to3)
+				.jsonView(JsonViews.PRIVATE.class).build());
 		assertSseResponse(sseResponse, "event:jsonView1",
 				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}");
 	}
-
-
 
 	private String testUrl(String path) {
 		return "http://localhost:" + this.port + path;
@@ -439,8 +439,14 @@ public class IntegrationTest {
 	private static void assertSseResponseWithException(Response response) {
 		assertThat(response.isSuccessful()).isTrue();
 		try {
-			response.body().string();
-			fail("request the body should fail");
+			ResponseBody body = response.body();
+			if (body != null) {
+				body.string();
+				fail("request the body should fail");
+			}
+			else {
+				fail("body should not be null");
+			}
 		}
 		catch (IOException e) {
 			System.out.println(e.getMessage());
@@ -451,9 +457,15 @@ public class IntegrationTest {
 		assertThat(response.isSuccessful()).isTrue();
 		String sse;
 		try {
-			sse = response.body().string();
-			String[] splittedSse = sse.split("\n");
-			assertThat(splittedSse).containsExactly(lines);
+			ResponseBody body = response.body();
+			if (body != null) {
+				sse = body.string();
+				String[] splittedSse = sse.split("\n");
+				assertThat(splittedSse).containsExactly(lines);
+			}
+			else {
+				fail("body should not be null");
+			}
 		}
 		catch (IOException e) {
 			fail(e.getMessage());
@@ -483,12 +495,12 @@ public class IntegrationTest {
 				.execute();
 		return longPollResponse;
 	}
-	
+
 	private void subscribe(String clientId, String eventName) throws IOException {
 		OkHttpClient client = createHttpClient();
 		client.newCall(new Request.Builder().get()
 				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
-				.execute();		
+				.execute();
 	}
 
 	private Response registerAndSubscribe(String clientId, String eventName)

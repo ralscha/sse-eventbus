@@ -51,5 +51,4 @@ public class TestObject3 {
 		this.privateData = privateData;
 	}
 
-
 }
