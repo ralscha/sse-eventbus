@@ -355,7 +355,6 @@ public class IntegrationTest {
 		assertThat(clients()).hasSize(120);
 
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
-		sleep(1, TimeUnit.SECONDS);
 		for (int i = 0; i < 100; i++) {
 			assertSseResponse(responses.get(i), "event:eventName", "data:payload");
 		}
