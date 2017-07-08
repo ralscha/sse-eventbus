@@ -86,6 +86,25 @@ public class IntegrationTest {
 	}
 
 	@Test
+	public void testRegisterAndSubscribeOnly() throws IOException {
+		Response sseResponse = registerAndSubscribeOnly("1", "event1");
+		sseResponse = registerAndSubscribe("1", "event2");
+
+		this.eventPublisher.publishEvent(SseEvent.of("event1", "payload1"));
+		this.eventPublisher.publishEvent(SseEvent.of("event2", "payload2"));
+
+		assertSseResponse(sseResponse, "event:event1", "data:payload1", "",
+				"event:event2", "data:payload2");
+
+		sseResponse = registerAndSubscribeOnly("1", "event3");
+		this.eventPublisher.publishEvent(SseEvent.of("event1", "payload1"));
+		this.eventPublisher.publishEvent(SseEvent.of("event2", "payload2"));
+		this.eventPublisher.publishEvent(SseEvent.of("event3", "payload3"));
+
+		assertSseResponse(sseResponse, "event:event3", "data:payload3");
+	}
+
+	@Test
 	public void testOneClientOneEventEmptyData() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.ofEvent("eventName"));
@@ -508,6 +527,14 @@ public class IntegrationTest {
 		OkHttpClient client = createHttpClient();
 		Request request = new Request.Builder().get()
 				.url(testUrl("/register/" + clientId + "/" + eventName)).build();
+		return client.newCall(request).execute();
+	}
+
+	private Response registerAndSubscribeOnly(String clientId, String eventName)
+			throws IOException {
+		OkHttpClient client = createHttpClient();
+		Request request = new Request.Builder().get()
+				.url(testUrl("/registerOnly/" + clientId + "/" + eventName)).build();
 		return client.newCall(request).execute();
 	}
 

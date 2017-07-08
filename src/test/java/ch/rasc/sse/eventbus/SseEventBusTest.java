@@ -176,6 +176,55 @@ public class SseEventBusTest {
 		assertThat(eventSubscribers().get("event2")).containsExactly("1");
 	}
 
+	@Test
+	public void testClientRegisterAndSubscribeOnly() {
+		assertThat(clients()).isEmpty();
+
+		SseEmitter se1 = this.eventBus.createSseEmitter("1", "one");
+		SseEmitter se2 = this.eventBus.createSseEmitter("2", "one", "two", "three");
+
+		assertThat(clients()).containsOnlyKeys("1", "2");
+		assertThat(clients().get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(clients().get("2").sseEmitter()).isEqualTo(se2);
+
+		assertThat(eventSubscribers()).containsOnlyKeys("one", "two", "three");
+		assertThat(eventSubscribers().get("one")).containsExactly("1", "2");
+		assertThat(eventSubscribers().get("two")).containsExactly("2");
+		assertThat(eventSubscribers().get("three")).containsExactly("2");
+
+		se1 = this.eventBus.createSseEmitter("1", true, "one");
+		se2 = this.eventBus.createSseEmitter("2", true, "three", "four", "five");
+
+		assertThat(clients()).containsOnlyKeys("1", "2");
+		assertThat(clients().get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(clients().get("2").sseEmitter()).isEqualTo(se2);
+
+		assertThat(eventSubscribers()).containsOnlyKeys("one", "three", "four", "five");
+		assertThat(eventSubscribers().get("one")).containsExactly("1");
+		assertThat(eventSubscribers().get("three")).containsExactly("2");
+		assertThat(eventSubscribers().get("four")).containsExactly("2");
+		assertThat(eventSubscribers().get("five")).containsExactly("2");
+
+		se1 = this.eventBus.createSseEmitter("1", true, "one");
+		se2 = this.eventBus.createSseEmitter("2", true, "one");
+
+		assertThat(clients()).containsOnlyKeys("1", "2");
+		assertThat(clients().get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(clients().get("2").sseEmitter()).isEqualTo(se2);
+
+		assertThat(eventSubscribers()).containsOnlyKeys("one");
+		assertThat(eventSubscribers().get("one")).containsExactly("1", "2");
+
+		this.eventBus.subscribeOnly("2", "two");
+		assertThat(eventSubscribers()).containsOnlyKeys("one", "two");
+		assertThat(eventSubscribers().get("one")).containsExactly("1");
+		assertThat(eventSubscribers().get("two")).containsExactly("2");
+
+		this.eventBus.subscribeOnly("1", "two");
+		assertThat(eventSubscribers()).containsOnlyKeys("two");
+		assertThat(eventSubscribers().get("two")).containsExactly("1", "2");
+	}
+
 	private Map<String, Client> clients() {
 		return (Map<String, Client>) ReflectionTestUtils.getField(this.eventBus,
 				"clients");
