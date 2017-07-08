@@ -155,6 +155,14 @@ public class SseEventBus {
 		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
 	}
 
+	/**
+	 * Subscribe to the event and unbubscribe to all other currently subscribed events
+	 */
+	public void subscribeOnly(String clientId, String event) {
+		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
+		this.unsubscribeFromAllEvents(clientId, event);
+	}
+
 	public void unsubscribe(String clientId, String event) {
 		Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
@@ -171,7 +179,6 @@ public class SseEventBus {
 	 * all events
 	 */
 	public void unsubscribeFromAllEvents(String clientId, String... keepEvents) {
-
 		Set<String> keepEventsSet = null;
 		if (keepEvents != null && keepEvents.length > 0) {
 			keepEventsSet = new HashSet<>();
