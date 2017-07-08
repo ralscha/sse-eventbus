@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.0</version>
+		<version>1.1.1</version>
 	</dependency>	
 ```
 
@@ -139,8 +139,22 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 1.1.1 - July 8, 2017
+  * Add support for automatic unregister clients from events during registering.
+  ```SseEventBus.createSseEmitter``` supports an additional boolean parameter. If true the method
+  subscribes the client to the provided events and unsubscribes it from all other currently subscribed events.
+  
+    ```eventBus.createSseEmitter("client1", 180_000L, true, "event1", "event2");```    
+    After this call the client is only subscribed to ```event1``` and ```event2```.
+  
+    *...later in the application...*   
+
+    ```eventBus.createSseEmitter("client1", 180_000L, true, "event1");```    
+    After this call the client is only subscribed to ```event1```. The method automatically unregistered the client from ```event2```.
+
+
 ### 1.1.0 - April 28, 2017
-  * Add support for Jackson JSON View. 
+  * Add support for Jackson JSON View.
     ```SseEvent.builder().event("eventName").data(dataObj).jsonView(JsonViews.PUBLIC.class).build()```   
   To support that the interface ```ch.rasc.sse.eventbus.DataObjectConverter``` changed. 
   Instead of the ```data``` object the two methods receive the ```SseEvent``` object.    
