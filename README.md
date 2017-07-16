@@ -139,6 +139,16 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 1.1.2 - July 16, 2017
+  * Add a workaround for the Microsoft Edge browser where the polyfills no longer work correctly.
+  The createSseEmitter method supports an additional parameter that tells the library to complete (close) the connection after sending a message.
+  This way the system behaves like long polling instead of http streaming.
+  ```
+  boolean completeAfterMessage = true;
+  eventBus.createSseEmitter("client1", 180_000L, true, completeAfterMessage, "event1", "event2");
+  ```
+
+
 ### 1.1.1 - July 8, 2017
   * Add support for automatic unregister clients from events during registering.
   ```SseEventBus.createSseEmitter``` supports an additional boolean parameter. If true the method

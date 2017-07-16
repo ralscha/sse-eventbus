@@ -117,10 +117,10 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
-			boolean completeAfterEachMessage, String... events) {
+			boolean completeAfterMessage, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
-		registerClient(clientId, emitter, completeAfterEachMessage);
+		registerClient(clientId, emitter, completeAfterMessage);
 
 		if (events != null && events.length > 0) {
 			if (unsubscribe) {
@@ -139,11 +139,11 @@ public class SseEventBus {
 	}
 
 	public void registerClient(String clientId, SseEmitter emitter,
-			boolean completeAfterEachMessage) {
+			boolean completeAfterMessage) {
 		Client client = this.clients.get(clientId);
 		if (client == null) {
 			this.clients.put(clientId,
-					new Client(clientId, emitter, completeAfterEachMessage));
+					new Client(clientId, emitter, completeAfterMessage));
 		}
 		else {
 			client.updateEmitter(emitter);
@@ -298,7 +298,7 @@ public class SseEventBus {
 		Client client = clientEvent.getClient();
 		try {
 			client.sseEmitter().send(clientEvent.createSseEventBuilder());
-			if (client.isCompleteAfterEachMessage()) {
+			if (client.isCompleteAfterMessage()) {
 				client.sseEmitter().complete();
 			}
 			return true;

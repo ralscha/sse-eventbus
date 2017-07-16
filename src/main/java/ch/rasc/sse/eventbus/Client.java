@@ -24,13 +24,13 @@ class Client {
 
 	private long lastTransfer;
 
-	private final boolean completeAfterEachMessage;
+	private final boolean completeAfterMessage;
 
-	Client(String id, SseEmitter sseEmitter, boolean completeAfterEachMessage) {
+	Client(String id, SseEmitter sseEmitter, boolean completeAfterMessage) {
 		this.id = id;
 		this.sseEmitter = sseEmitter;
 		this.lastTransfer = System.currentTimeMillis();
-		this.completeAfterEachMessage = completeAfterEachMessage;
+		this.completeAfterMessage = completeAfterMessage;
 	}
 
 	public String getId() {
@@ -53,8 +53,8 @@ class Client {
 		this.sseEmitter = emitter;
 	}
 
-	boolean isCompleteAfterEachMessage() {
-		return this.completeAfterEachMessage;
+	boolean isCompleteAfterMessage() {
+		return this.completeAfterMessage;
 	}
 
 }
