@@ -23,7 +23,7 @@ class Client {
 	private SseEmitter sseEmitter;
 
 	private long lastTransfer;
-	
+
 	private final boolean completeAfterEachMessage;
 
 	Client(String id, SseEmitter sseEmitter, boolean completeAfterEachMessage) {

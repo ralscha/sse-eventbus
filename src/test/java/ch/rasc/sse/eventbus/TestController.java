@@ -40,7 +40,7 @@ public class TestController {
 			@PathVariable("event") String event) {
 		return this.eventBus.createSseEmitter(id, 3_000L, event.split(","));
 	}
-	
+
 	@GetMapping("/registerOnly/{id}/{event}")
 	public SseEmitter eventbusOnly(@PathVariable("id") String id,
 			@PathVariable("event") String event) {
