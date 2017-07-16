@@ -88,16 +88,21 @@ public class SseEventBus {
 	}
 
 	public SseEmitter createSseEmitter(String clientId, String... events) {
-		return createSseEmitter(clientId, 180_000L, false, events);
+		return createSseEmitter(clientId, 180_000L, false, false, events);
 	}
 
 	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe,
 			String... events) {
-		return createSseEmitter(clientId, 180_000L, unsubscribe, events);
+		return createSseEmitter(clientId, 180_000L, unsubscribe, false, events);
 	}
 
 	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
-		return createSseEmitter(clientId, timeout, false, events);
+		return createSseEmitter(clientId, timeout, false, false, events);
+	}
+
+	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
+			String... events) {
+		return createSseEmitter(clientId, timeout, unsubscribe, false, events);
 	}
 
 	/**
@@ -112,10 +117,10 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
-			String... events) {
+			boolean completeAfterEachMessage, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
-		registerClient(clientId, emitter);
+		registerClient(clientId, emitter, completeAfterEachMessage);
 
 		if (events != null && events.length > 0) {
 			if (unsubscribe) {
@@ -130,9 +135,15 @@ public class SseEventBus {
 	}
 
 	public void registerClient(String clientId, SseEmitter emitter) {
+		this.registerClient(clientId, emitter, false);
+	}
+
+	public void registerClient(String clientId, SseEmitter emitter,
+			boolean completeAfterEachMessage) {
 		Client client = this.clients.get(clientId);
 		if (client == null) {
-			this.clients.put(clientId, new Client(clientId, emitter));
+			this.clients.put(clientId,
+					new Client(clientId, emitter, completeAfterEachMessage));
 		}
 		else {
 			client.updateEmitter(emitter);
@@ -287,6 +298,9 @@ public class SseEventBus {
 		Client client = clientEvent.getClient();
 		try {
 			client.sseEmitter().send(clientEvent.createSseEventBuilder());
+			if (client.isCompleteAfterEachMessage()) {
+				client.sseEmitter().complete();
+			}
 			return true;
 		}
 		catch (Exception e) {
