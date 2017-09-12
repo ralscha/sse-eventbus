@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.2</version>
+		<version>1.1.3</version>
 	</dependency>	
 ```
 
@@ -139,7 +139,7 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
-### 1.1.3 - September ??, 2017
+### 1.1.3 - September 12, 2017
   * Add the following public methods to the SseEventBus class to query events and subscribers.
      * Set<String> getAllClientIds()
      * Set<String> getAllEvents()
