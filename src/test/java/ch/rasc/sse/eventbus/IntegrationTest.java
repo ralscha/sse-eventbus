@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
@@ -34,8 +33,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.junit4.SpringRunner;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -320,7 +317,12 @@ public class IntegrationTest {
 		sleep(2, TimeUnit.SECONDS);
 		assertSseResponseWithException(sseResponse);
 		sleep(2, TimeUnit.SECONDS);
-		assertThat(clients()).hasSize(1);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
+		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 
 		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
 				.data("payload1").build();
@@ -334,7 +336,12 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse, "event:eventName", "data:payload1", "",
 				"event:eventName", "data:payload2", "", "event:eventName",
 				"data:payload3");
-		assertThat(clients()).hasSize(1);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
+		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
 
 		sseEvent = SseEvent.builder().event("eventName").data("payload4").build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -347,18 +354,40 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse, "event:eventName", "data:payload4", "",
 				"event:eventName", "data:payload5", "", "event:eventName",
 				"data:payload6");
-		assertThat(clients()).hasSize(1);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
+		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
 
 		this.eventBus.unregisterClient("1");
-		assertThat(clients()).hasSize(0);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+		assertThat(this.eventBus.getAllEvents()).isEmpty();
+		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 	}
 
 	@Test
 	public void testClientExpiration() throws IOException {
 		registerSubscribe("1", "eventName", true);
-		assertThat(clients()).hasSize(1);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
+		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
+		
 		sleep(21, TimeUnit.SECONDS);
-		assertThat(clients()).hasSize(0);
+		
+		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+		assertThat(this.eventBus.getAllEvents()).isEmpty();
+		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 	}
 
 	@Test
@@ -371,7 +400,13 @@ public class IntegrationTest {
 			responses.add(registerSubscribe(String.valueOf(i), "eventName", true));
 		}
 		sleep(1, TimeUnit.SECONDS);
-		assertThat(clients()).hasSize(120);
+		
+		assertThat(this.eventBus.getAllClientIds()).hasSize(120);
+		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+		assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
 
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
 		for (int i = 0; i < 100; i++) {
@@ -379,7 +414,12 @@ public class IntegrationTest {
 		}
 
 		sleep(21, TimeUnit.SECONDS);
-		assertThat(clients()).hasSize(0);
+		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+		assertThat(this.eventBus.getAllEvents()).isEmpty();
+		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();	
 	}
 
 	@Test
@@ -545,12 +585,6 @@ public class IntegrationTest {
 		catch (InterruptedException e) {
 			// nothing here
 		}
-	}
-
-	@SuppressWarnings("unchecked")
-	private Map<String, SseEmitter> clients() {
-		return (Map<String, SseEmitter>) ReflectionTestUtils.getField(this.eventBus,
-				"clients");
 	}
 
 }

@@ -17,6 +17,8 @@ package ch.rasc.sse.eventbus;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -25,6 +27,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -40,12 +43,12 @@ public class SseEventBus {
 	/**
 	 * Client Id -> SseEmitter
 	 */
-	private final Map<String, Client> clients;
+	private final ConcurrentMap<String, Client> clients;
 
 	/**
-	 * EventName -> Collection of Client Ids
+	 * EventName -> Collection of Client IDs
 	 */
-	private final Map<String, Set<String>> eventSubscribers;
+	private final ConcurrentMap<String, Set<String>> eventSubscribers;
 
 	private final ScheduledExecutorService taskScheduler;
 
@@ -175,19 +178,14 @@ public class SseEventBus {
 	}
 
 	public void unsubscribe(String clientId, String event) {
-		Set<String> clientIds = this.eventSubscribers.get(event);
-		if (clientIds != null) {
-			clientIds.remove(clientId);
-			if (clientIds.isEmpty()) {
-				this.eventSubscribers.remove(event);
-			}
-		}
+		this.eventSubscribers.computeIfPresent(event,
+				(k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
 	}
 
 	/**
 	 * Unsubscribe the client from all events except the events provided with the
-	 * keepEvents parameter. When keepEvents is null the client will be unsubscribed from
-	 * all events
+	 * keepEvents parameter. When keepEvents is null the client unsubscribes from all
+	 * events
 	 */
 	public void unsubscribeFromAllEvents(String clientId, String... keepEvents) {
 		Set<String> keepEventsSet = null;
@@ -198,18 +196,11 @@ public class SseEventBus {
 			}
 		}
 
-		Set<String> emptyEvents = new HashSet<>();
-		for (Map.Entry<String, Set<String>> entry : this.eventSubscribers.entrySet()) {
-			if (keepEventsSet == null || !keepEventsSet.contains(entry.getKey())) {
-				Set<String> clientIds = entry.getValue();
-				clientIds.remove(clientId);
-				if (clientIds.isEmpty()) {
-					emptyEvents.add(entry.getKey());
-				}
-			}
+		Set<String> events = new HashSet<>(this.eventSubscribers.keySet());
+		if (keepEventsSet != null) {
+			events.removeAll(keepEventsSet);
 		}
-
-		emptyEvents.forEach(this.eventSubscribers::remove);
+		events.forEach(event -> unsubscribe(clientId, event));
 	}
 
 	@EventListener
@@ -345,4 +336,71 @@ public class SseEventBus {
 		this.dataObjectConverters = dataObjectConverters;
 	}
 
+	/**
+	 * Get a collection of all registered clientIds
+	 * 
+	 * @return an unmodifiable set of all registered clientIds
+	 */
+	public Set<String> getAllClientIds() {
+		return Collections.unmodifiableSet(this.clients.keySet());
+	}
+
+	/**
+	 * Get a collection of all registered events
+	 * 
+	 * @return an unmodifiable set of all events
+	 */
+	public Set<String> getAllEvents() {
+		return Collections.unmodifiableSet(this.eventSubscribers.keySet());
+	}
+
+	/**
+	 * Get a map that maps events to a collection of clientIds
+	 * 
+	 * @return map with the event as key, the value is a set of clientIds
+	 */
+	public Map<String, Set<String>> getAllSubscriptions() {
+		Map<String, Set<String>> result = new HashMap<>();
+		this.eventSubscribers.forEach((k, v) -> {
+			result.put(k, Collections.unmodifiableSet(v));
+		});
+		return Collections.unmodifiableMap(result);
+	}
+
+	/**
+	 * Get all subscribers to a particular event
+	 * 
+	 * @return an unmodifiable set of all subscribed clientIds to this event. Empty when
+	 * nobody is subscribed
+	 */
+	public Set<String> getSubscribers(String event) {
+		Set<String> clientIds = this.eventSubscribers.get(event);
+		if (clientIds != null) {
+			return Collections.unmodifiableSet(clientIds);
+		}
+		return Collections.emptySet();
+	}
+
+	/**
+	 * Get the number of subscribers to a particular event
+	 * 
+	 * @return the number of clientIds subscribed to this event. 0 when nobody is
+	 * subscribed
+	 */
+	public int countSubscribers(String event) {
+		Set<String> clientIds = this.eventSubscribers.get(event);
+		if (clientIds != null) {
+			return clientIds.size();
+		}
+		return 0;
+	}
+
+	/**
+	 * Check if a particular event has subscribers
+	 * 
+	 * @return true when the event has 1 or more subscribers.
+	 */
+	public boolean hasSubscribers(String event) {
+		return countSubscribers(event) != 0;
+	}
 }
