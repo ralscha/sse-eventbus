@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.1</version>
+		<version>1.1.2</version>
 	</dependency>	
 ```
 
