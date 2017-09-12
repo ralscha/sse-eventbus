@@ -167,7 +167,7 @@ public class SseEventBus {
 	}
 
 	/**
-	 * Subscribe to the event and unbubscribe to all other currently subscribed events
+	 * Subscribe to the event and unsubscribe to all other currently subscribed events
 	 */
 	public void subscribeOnly(String clientId, String event) {
 		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
