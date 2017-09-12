@@ -341,7 +341,7 @@ public class IntegrationTest {
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
 		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 
 		sseEvent = SseEvent.builder().event("eventName").data("payload4").build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -359,7 +359,7 @@ public class IntegrationTest {
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
 		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 
 		this.eventBus.unregisterClient("1");
 		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
@@ -379,9 +379,9 @@ public class IntegrationTest {
 		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
 		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
-		
+
 		sleep(21, TimeUnit.SECONDS);
-		
+
 		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
@@ -400,13 +400,13 @@ public class IntegrationTest {
 			responses.add(registerSubscribe(String.valueOf(i), "eventName", true));
 		}
 		sleep(1, TimeUnit.SECONDS);
-		
+
 		assertThat(this.eventBus.getAllClientIds()).hasSize(120);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
 		assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");		
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
 		for (int i = 0; i < 100; i++) {
@@ -419,7 +419,7 @@ public class IntegrationTest {
 		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
 		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
-		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();	
+		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 	}
 
 	@Test
