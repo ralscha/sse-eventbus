@@ -235,6 +235,7 @@
 						<exclude>mvnw.cmd</exclude>
 						<exclude>mvnw</exclude>
 						<exclude>.apt_generated/**</exclude>
+						<exclude>.editorconfig</exclude>
 					</excludes>
 					<strictCheck>true</strictCheck>
 				</configuration>
