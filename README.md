@@ -1,7 +1,7 @@
 
 [![Build Status](https://api.travis-ci.org/ralscha/sse-eventbus.png)](https://travis-ci.org/ralscha/sse-eventbus)
 
-sse-eventbus is a Java library that sits on top of [Spring's Sever-Sent Event support](http://docs.spring.io/spring/docs/current/spring-framework-reference/htmlsingle/#mvc-ann-async-sse).   
+sse-eventbus is a Java library that sits on top of [Spring's Sever-Sent Event support](https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-async-sse).   
 It keeps track of connected clients and broadcasts events to them.
 
 ## Usage
