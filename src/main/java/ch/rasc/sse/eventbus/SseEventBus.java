@@ -296,7 +296,6 @@ public class SseEventBus {
 			return true;
 		}
 		catch (Exception e) {
-			client.sseEmitter().completeWithError(e);
 			return false;
 		}
 
