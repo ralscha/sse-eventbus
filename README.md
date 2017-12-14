@@ -139,6 +139,9 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 1.1.4 - December 15, 2017
+  * Resolves [Issue #2](https://github.com/ralscha/sse-eventbus/issues/2)
+
 ### 1.1.3 - September 12, 2017
   * Add the following public methods to the SseEventBus class to query events and subscribers.
      * Set<String> getAllClientIds()
@@ -150,7 +153,7 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ### 1.1.2 - July 16, 2017
-  * Add a workaround for the Microsoft Edge browser where the polyfills no longer work correctly.
+  * Add a workaround for the Microsoft Edge browser where the polyfill no longer work correctly.
   The createSseEmitter method supports an additional parameter that tells the library to complete (close) the connection after sending a message.
   This way the system behaves like long polling instead of http streaming.
   ```
