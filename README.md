@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.3</version>
+		<version>1.1.4</version>
 	</dependency>	
 ```
 
@@ -140,7 +140,8 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 ## Changelog
 
 ### 1.1.4 - December 15, 2017
-  * Resolves [Issue #2](https://github.com/ralscha/sse-eventbus/issues/2)
+  * Resolves [Issue #2](https://github.com/ralscha/sse-eventbus/issues/2). Make sure that your project depends on Spring 4.3.13 or newer.
+
 
 ### 1.1.3 - September 12, 2017
   * Add the following public methods to the SseEventBus class to query events and subscribers.
