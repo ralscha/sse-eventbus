@@ -18,7 +18,6 @@ package ch.rasc.sse.eventbus;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -45,10 +44,7 @@ public class SseEventBus {
 	 */
 	private final ConcurrentMap<String, Client> clients;
 
-	/**
-	 * EventName -> Collection of Client IDs
-	 */
-	private final ConcurrentMap<String, Set<String>> eventSubscribers;
+	private final SubscriptionRegistry subscriptionRegistry;
 
 	private final ScheduledExecutorService taskScheduler;
 
@@ -62,14 +58,16 @@ public class SseEventBus {
 
 	private final BlockingQueue<ClientEvent> sendQueue;
 
-	public SseEventBus(SseEventBusConfigurer configurer) {
+	public SseEventBus(SseEventBusConfigurer configurer,
+			SubscriptionRegistry subscriptionRegistry) {
+
+		this.subscriptionRegistry = subscriptionRegistry;
 
 		this.taskScheduler = configurer.taskScheduler();
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
 		this.clientExpiration = configurer.clientExpiration();
 
 		this.clients = new ConcurrentHashMap<>();
-		this.eventSubscribers = new ConcurrentHashMap<>();
 
 		this.errorQueue = configurer.errorQueue();
 		this.sendQueue = configurer.sendQueue();
@@ -166,20 +164,19 @@ public class SseEventBus {
 	}
 
 	public void subscribe(String clientId, String event) {
-		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
+		this.subscriptionRegistry.subscribe(clientId, event);
 	}
 
 	/**
 	 * Subscribe to the event and unsubscribe to all other currently subscribed events
 	 */
 	public void subscribeOnly(String clientId, String event) {
-		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
+		this.subscriptionRegistry.subscribe(clientId, event);
 		this.unsubscribeFromAllEvents(clientId, event);
 	}
 
 	public void unsubscribe(String clientId, String event) {
-		this.eventSubscribers.computeIfPresent(event,
-				(k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
+		this.subscriptionRegistry.unsubscribe(clientId, event);
 	}
 
 	/**
@@ -196,7 +193,7 @@ public class SseEventBus {
 			}
 		}
 
-		Set<String> events = this.eventSubscribers.keySet();
+		Set<String> events = this.subscriptionRegistry.getAllEvents();
 		if (keepEventsSet != null) {
 			events = new HashSet<>(events);
 			events.removeAll(keepEventsSet);
@@ -216,7 +213,8 @@ public class SseEventBus {
 			if (event.clientIds().isEmpty()) {
 				for (Client client : this.clients.values()) {
 					if (!event.excludeClientIds().contains(client.getId())
-							&& isUserSubscribed(client.getId(), event)) {
+							&& this.subscriptionRegistry.isClientSubscribedToEvent(
+									client.getId(), event.event())) {
 						this.sendQueue
 								.put(new ClientEvent(client, event, convertedValue));
 					}
@@ -224,7 +222,8 @@ public class SseEventBus {
 			}
 			else {
 				for (String clientId : event.clientIds()) {
-					if (isUserSubscribed(clientId, event)) {
+					if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
+							event.event())) {
 						this.sendQueue.put(new ClientEvent(this.clients.get(clientId),
 								event, convertedValue));
 					}
@@ -241,8 +240,9 @@ public class SseEventBus {
 		this.errorQueue.drainTo(failedEvents);
 
 		for (ClientEvent sseClientEvent : failedEvents) {
-			if (isUserSubscribed(sseClientEvent.getClient().getId(),
-					sseClientEvent.getSseEvent())) {
+			if (this.subscriptionRegistry.isClientSubscribedToEvent(
+					sseClientEvent.getClient().getId(),
+					sseClientEvent.getSseEvent().event())) {
 				try {
 					this.sendQueue.put(sseClientEvent);
 				}
@@ -251,14 +251,6 @@ public class SseEventBus {
 				}
 			}
 		}
-	}
-
-	private boolean isUserSubscribed(String clientId, SseEvent event) {
-		Set<String> subscribedClients = this.eventSubscribers.get(event.event());
-		if (subscribedClients != null) {
-			return subscribedClients.contains(clientId);
-		}
-		return false;
 	}
 
 	private void eventLoop() {
@@ -351,7 +343,7 @@ public class SseEventBus {
 	 * @return an unmodifiable set of all events
 	 */
 	public Set<String> getAllEvents() {
-		return Collections.unmodifiableSet(this.eventSubscribers.keySet());
+		return this.subscriptionRegistry.getAllEvents();
 	}
 
 	/**
@@ -360,11 +352,7 @@ public class SseEventBus {
 	 * @return map with the event as key, the value is a set of clientIds
 	 */
 	public Map<String, Set<String>> getAllSubscriptions() {
-		Map<String, Set<String>> result = new HashMap<>();
-		this.eventSubscribers.forEach((k, v) -> {
-			result.put(k, Collections.unmodifiableSet(v));
-		});
-		return Collections.unmodifiableMap(result);
+		return this.subscriptionRegistry.getAllSubscriptions();
 	}
 
 	/**
@@ -374,11 +362,7 @@ public class SseEventBus {
 	 * nobody is subscribed
 	 */
 	public Set<String> getSubscribers(String event) {
-		Set<String> clientIds = this.eventSubscribers.get(event);
-		if (clientIds != null) {
-			return Collections.unmodifiableSet(clientIds);
-		}
-		return Collections.emptySet();
+		return this.subscriptionRegistry.getSubscribers(event);
 	}
 
 	/**
@@ -388,11 +372,7 @@ public class SseEventBus {
 	 * subscribed
 	 */
 	public int countSubscribers(String event) {
-		Set<String> clientIds = this.eventSubscribers.get(event);
-		if (clientIds != null) {
-			return clientIds.size();
-		}
-		return 0;
+		return this.subscriptionRegistry.countSubscribers(event);
 	}
 
 	/**

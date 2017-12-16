@@ -26,16 +26,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import ch.rasc.sse.eventbus.DataObjectConverter;
 import ch.rasc.sse.eventbus.DefaultDataObjectConverter;
+import ch.rasc.sse.eventbus.DefaultSubscriptionRegistry;
 import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
 import ch.rasc.sse.eventbus.SseEventBus;
+import ch.rasc.sse.eventbus.SubscriptionRegistry;
 
 /**
  * To enable the SSE EventBus library create a @Configuration class that either
  * <ul>
  * <li>extends this class</li>
- * <li>or implements the interface {@link SseEventBusConfigurer} and adds the
+ * <li>or implement the interface {@link SseEventBusConfigurer} and add the
  * {@link EnableSseEventBus} annotation to any @Configuration class</li>
- * <li>or just adds the {@link EnableSseEventBus} annotation to any @Configuration
+ * <li>or just add the {@link EnableSseEventBus} annotation to any @Configuration
  * class</li>
  */
 @Configuration
@@ -50,6 +52,9 @@ public class DefaultSseEventBusConfiguration {
 	@Autowired(required = false)
 	private List<DataObjectConverter> dataObjectConverters;
 
+	@Autowired(required = false)
+	private SubscriptionRegistry subscriptionRegistry;
+
 	@Bean
 	public SseEventBus eventBus() {
 		SseEventBusConfigurer config = this.configurer;
@@ -58,7 +63,12 @@ public class DefaultSseEventBusConfiguration {
 				/* nothing_here */ };
 		}
 
-		SseEventBus sseEventBus = new SseEventBus(config);
+		SubscriptionRegistry registry = this.subscriptionRegistry;
+		if (registry == null) {
+			registry = new DefaultSubscriptionRegistry();
+		}
+
+		SseEventBus sseEventBus = new SseEventBus(config, registry);
 
 		List<DataObjectConverter> converters = this.dataObjectConverters;
 		if (converters == null) {
