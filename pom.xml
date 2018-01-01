@@ -127,6 +127,7 @@
 
 	<build>
 		<plugins>
+		
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -168,7 +169,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-site-plugin</artifactId>
-				<version>3.6</version>
+				<version>3.7</version>
 			</plugin>
 
 			<plugin>
@@ -205,7 +206,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-javadoc-plugin</artifactId>
-				<version>2.10.4</version>
+				<version>3.0.0</version>
 				<configuration>
 					<additionalparam>-Xdoclint:none</additionalparam>
 				</configuration>
@@ -220,7 +221,7 @@
 					<properties>
 						
 						<year>${project.inceptionYear}</year>
-						<currentYear>2017</currentYear>
+						<currentYear>2018</currentYear>
 						
 					</properties>
 					<excludes>
