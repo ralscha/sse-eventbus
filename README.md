@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.4</version>
+		<version>1.1.5</version>
 	</dependency>	
 ```
 
@@ -138,6 +138,25 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ## Changelog
+
+### 1.1.5 - January 7, 2018
+  * Extract subscription registry code out of the SseEventBus class into the interface SubscriptionRegistry and the class DefaultSubscriptionRegistry. 
+    This allows a project to customize the existing implementation or write their own implementation. To
+	override the default implementation add a Spring managed bean of type SubscriptionRegistry to your project.   
+
+	Example:
+	```
+	@Component
+	public class CustomSubscriptionRegistry extends DefaultSubscriptionRegistry {
+
+		@Override
+		public boolean isClientSubscribedToEvent(String clientId, String eventName) {
+			return super.isClientSubscribedToEvent(clientId, eventName)
+					|| super.isClientSubscribedToEvent(clientId, "*");
+		}
+	}	
+	```
+  
 
 ### 1.1.4 - December 15, 2017
   * Resolves [Issue #2](https://github.com/ralscha/sse-eventbus/issues/2). Make sure that your project depends on Spring 4.3.13 or newer.
