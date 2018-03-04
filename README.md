@@ -118,6 +118,9 @@ The library is hosted on the Central Maven Repository
 Simple demo application:    
 https://github.com/ralscha/sse-eventbus-demo
 
+Ionic Demo Chat application:    
+https://github.com/ralscha/sse-eventbus-demo-chat
+
 
 ## More information
 Articles about Server-Sent Events    
