@@ -32,13 +32,23 @@ import ch.rasc.sse.eventbus.ClientEvent;
 public interface SseEventBusConfigurer {
 
 	/**
-	 * Specifies the delay between the runs of the internal error queue job. <br>
-	 * This job re-submits failed events.
+	 * Specifies the delay between runs of the internal error queue job. <br>
+	 * This job tries to re-submits failed sent events.
 	 * <p>
 	 * Default: 500 milliseconds
 	 */
 	default Duration schedulerDelay() {
 		return Duration.ofMillis(500);
+	}
+
+	/**
+	 * Specifies the delay between runs of the internal job that checks for expired
+	 * clients.<br>
+	 * <p>
+	 * Default: {@link #clientExpiration()} (1 day)
+	 */
+	default Duration clientExpirationJobDelay() {
+		return clientExpiration();
 	}
 
 	/**
@@ -52,8 +62,8 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * Number of tries to send a response. When the event cannot be send it will be
-	 * removed from the internal registry.
+	 * Number of tries to send an event. When the event cannot be send that many times it
+	 * will be removed from the internal registry.
 	 */
 	default int noOfSendResponseTries() {
 		return 40;
