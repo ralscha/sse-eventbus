@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.5</version>
+		<version>1.1.6</version>
 	</dependency>	
 ```
 
@@ -141,6 +141,11 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ## Changelog
+
+### 1.1.6 - March 21, 2018
+  * Change client expiration job to fixed delay and add separate configuration for this delay. By default it is 1 day, you change this value by implementing
+    `SseEventBusConfigurer.clientExpirationJobDelay` 
+
 
 ### 1.1.5 - January 7, 2018
   * Extract subscription registry code out of the SseEventBus class into the interface SubscriptionRegistry and the class DefaultSubscriptionRegistry. 
