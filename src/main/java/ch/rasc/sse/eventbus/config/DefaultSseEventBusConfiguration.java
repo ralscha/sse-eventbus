@@ -44,16 +44,16 @@ import ch.rasc.sse.eventbus.SubscriptionRegistry;
 public class DefaultSseEventBusConfiguration {
 
 	@Autowired(required = false)
-	private SseEventBusConfigurer configurer;
+	protected SseEventBusConfigurer configurer;
 
 	@Autowired(required = false)
-	private ObjectMapper objectMapper;
+	protected ObjectMapper objectMapper;
 
 	@Autowired(required = false)
-	private List<DataObjectConverter> dataObjectConverters;
+	protected List<DataObjectConverter> dataObjectConverters;
 
 	@Autowired(required = false)
-	private SubscriptionRegistry subscriptionRegistry;
+	protected SubscriptionRegistry subscriptionRegistry;
 
 	@Bean
 	public SseEventBus eventBus() {
