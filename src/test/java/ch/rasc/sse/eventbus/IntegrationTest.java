@@ -482,6 +482,13 @@ public class IntegrationTest {
 				"data:{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}");
 	}
 
+	@Test
+	public void testMultiline() throws IOException {
+		Response sseResponse = registerSubscribe("1", "eventName");
+		this.eventPublisher.publishEvent(SseEvent.of("eventName", "1. line\n2. line"));
+		assertSseResponse(sseResponse, "event:eventName", "data:1. line", "data:2. line");
+	}
+
 	private String testUrl(String path) {
 		return "http://localhost:" + this.port + path;
 	}

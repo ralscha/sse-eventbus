@@ -54,7 +54,14 @@ public class ClientEvent {
 		this.event.comment().ifPresent(sseBuilder::comment);
 
 		if (this.convertedValue != null) {
-			sseBuilder.data(this.convertedValue);
+			for (String line : this.convertedValue.split("\n")) {
+				sseBuilder.data(line);
+			}
+		}
+		else if (this.event.data() instanceof String) {
+			for (String line : ((String) this.event.data()).split("\n")) {
+				sseBuilder.data(line);
+			}
 		}
 		else {
 			sseBuilder.data(this.event.data());
