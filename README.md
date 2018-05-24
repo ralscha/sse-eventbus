@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.6</version>
+		<version>1.1.7</version>
 	</dependency>	
 ```
 
@@ -141,6 +141,12 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ## Changelog
+
+### 1.1.7 - May 24, 2018
+  * Resolves [Issue #8](https://github.com/ralscha/sse-eventbus/issues/8): Fix handling messages containing a new line character \n
+  
+  * Resolves [Issue #6](https://github.com/ralscha/sse-eventbus/issues/6): Make members of DefaultSseEventBusConfiguration protected for easier subclassing 
+  
 
 ### 1.1.6 - March 21, 2018
   * Change client expiration job to fixed delay and add separate configuration for this delay. By default it is 1 day, you change this value by implementing
