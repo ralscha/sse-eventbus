@@ -78,7 +78,9 @@ public interface SseEvent {
 	}
 
 	public static final class Builder extends ImmutableSseEvent.Builder {
+
 		// nothing here
+
 	}
 
 }

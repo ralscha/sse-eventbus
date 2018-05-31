@@ -118,4 +118,5 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	public boolean hasSubscribers(String event) {
 		return countSubscribers(event) != 0;
 	}
+
 }

@@ -21,9 +21,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
 public class ClientEvent {
+
 	private final Client client;
+
 	private final SseEvent event;
+
 	private final String convertedValue;
+
 	private int errorCounter;
 
 	public ClientEvent(Client client, SseEvent event, String convertedValue) {

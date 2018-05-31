@@ -109,7 +109,6 @@ public class SseEventBus {
 	/**
 	 * Creates a {@link SseEmitter} and registers the client in the internal database.
 	 * Client will be subscribed to the provided events if specified.
-	 *
 	 * @param clientId unique client identifier
 	 * @param timeout timeout value in milliseconds
 	 * @param unsubscribe if true unsubscribes from all events that are not provided with
@@ -330,7 +329,6 @@ public class SseEventBus {
 
 	/**
 	 * Get a collection of all registered clientIds
-	 *
 	 * @return an unmodifiable set of all registered clientIds
 	 */
 	public Set<String> getAllClientIds() {
@@ -339,7 +337,6 @@ public class SseEventBus {
 
 	/**
 	 * Get a collection of all registered events
-	 *
 	 * @return an unmodifiable set of all events
 	 */
 	public Set<String> getAllEvents() {
@@ -348,7 +345,6 @@ public class SseEventBus {
 
 	/**
 	 * Get a map that maps events to a collection of clientIds
-	 *
 	 * @return map with the event as key, the value is a set of clientIds
 	 */
 	public Map<String, Set<String>> getAllSubscriptions() {
@@ -357,7 +353,6 @@ public class SseEventBus {
 
 	/**
 	 * Get all subscribers to a particular event
-	 *
 	 * @return an unmodifiable set of all subscribed clientIds to this event. Empty when
 	 * nobody is subscribed
 	 */
@@ -367,7 +362,6 @@ public class SseEventBus {
 
 	/**
 	 * Get the number of subscribers to a particular event
-	 *
 	 * @return the number of clientIds subscribed to this event. 0 when nobody is
 	 * subscribed
 	 */
@@ -377,10 +371,10 @@ public class SseEventBus {
 
 	/**
 	 * Check if a particular event has subscribers
-	 *
 	 * @return true when the event has 1 or more subscribers.
 	 */
 	public boolean hasSubscribers(String event) {
 		return countSubscribers(event) != 0;
 	}
+
 }

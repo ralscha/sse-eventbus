@@ -16,7 +16,9 @@
 package ch.rasc.sse.eventbus;
 
 public class TestObject2 {
+
 	private long id;
+
 	private String customer;
 
 	public TestObject2(long id, String customer) {

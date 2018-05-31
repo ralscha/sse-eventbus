@@ -44,6 +44,7 @@ public class SseEventBusTest {
 	@Configuration
 	@EnableSseEventBus
 	static class Config implements SseEventBusConfigurer {
+
 		@Override
 		public Duration clientExpiration() {
 			return Duration.ofSeconds(5);
@@ -53,6 +54,7 @@ public class SseEventBusTest {
 		public int noOfSendResponseTries() {
 			return 1;
 		}
+
 	}
 
 	@Autowired

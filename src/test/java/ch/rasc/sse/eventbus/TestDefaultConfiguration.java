@@ -26,6 +26,7 @@ import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 @SpringBootApplication
 @EnableSseEventBus
 public class TestDefaultConfiguration implements SseEventBusConfigurer {
+
 	@Override
 	public Duration clientExpiration() {
 		return Duration.ofSeconds(10);
@@ -47,4 +48,5 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 			}
 		};
 	}
+
 }

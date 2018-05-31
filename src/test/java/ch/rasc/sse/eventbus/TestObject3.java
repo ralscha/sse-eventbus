@@ -18,6 +18,7 @@ package ch.rasc.sse.eventbus;
 import com.fasterxml.jackson.annotation.JsonView;
 
 public class TestObject3 {
+
 	@JsonView(JsonViews.PUBLIC.class)
 	private String uuid;
 

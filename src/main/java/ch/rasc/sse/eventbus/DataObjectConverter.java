@@ -20,4 +20,5 @@ public interface DataObjectConverter {
 	boolean supports(SseEvent event);
 
 	String convert(SseEvent event);
+
 }

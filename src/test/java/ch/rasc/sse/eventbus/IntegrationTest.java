@@ -41,8 +41,7 @@ import okhttp3.ResponseBody;
 
 @SuppressWarnings("resource")
 @RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
-		classes = TestDefaultConfiguration.class)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, classes = TestDefaultConfiguration.class)
 public class IntegrationTest {
 
 	@LocalServerPort

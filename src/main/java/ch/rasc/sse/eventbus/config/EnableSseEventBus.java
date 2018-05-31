@@ -52,5 +52,7 @@ import org.springframework.context.annotation.Import;
 @Documented
 @Import(DefaultSseEventBusConfiguration.class)
 public @interface EnableSseEventBus {
+
 	// nothing here
+
 }
