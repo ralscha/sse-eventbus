@@ -227,10 +227,10 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2", "3")
+		ImmutableSseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().addClientId("2", "3").event("eventName")
+		sseEvent = SseEvent.builder().addClientIds("2", "3").event("eventName")
 				.data("payload2").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse1, "");
@@ -246,11 +246,11 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2", "3")
-				.addExcludeClientId("2", "1").event("eventName").data("payload1").build();
+		ImmutableSseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
+				.addExcludeClientIds("2", "1").event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().addClientId("2", "3")
-				.addExcludeClientId("3", "2", "1").event("eventName").data("payload2")
+		sseEvent = SseEvent.builder().addClientIds("2", "3")
+				.addExcludeClientIds("3", "2", "1").event("eventName").data("payload2")
 				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse1, "");
@@ -284,10 +284,10 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientId("2", "3")
+		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientIds("2", "3")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().addExcludeClientId("1", "3").event("eventName")
+		sseEvent = SseEvent.builder().addExcludeClientIds("1", "3").event("eventName")
 				.data("payload2").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse1, "event:eventName", "data:payload1");
