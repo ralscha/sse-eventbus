@@ -36,7 +36,7 @@ public class SseController {
 	public SseEmitter register(@PathVariable("id") String id) {
 		SseEmitter emitter = new SseEmitter(180_000L);
 		emitter.onTimeout(emitter::complete);
-		this.eventBus.registerClient(clientId, emitter);
+		this.eventBus.registerClient(id, emitter);
 		this.eventBus.subscribe(id, SseEvent.DEFAULT_EVENT);
 		return emitter;
 
