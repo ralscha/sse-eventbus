@@ -74,13 +74,40 @@ public interface SseEvent {
 	}
 
 	public static Builder builder() {
-		return new Builder();
+		return ImmutableSseEvent.builder();
 	}
 
-	public static final class Builder extends ImmutableSseEvent.Builder {
+	public interface Builder {
 
-		// nothing here
+	    Builder addClientId(String element);
 
+	    Builder addClientIds(String... elements);
+
+	    Builder clientIds(Iterable<String> elements);
+
+	    Builder addAllClientIds(Iterable<String> elements);
+
+	    Builder addExcludeClientId(String element);
+
+	    Builder addExcludeClientIds(String... elements);
+
+	    Builder excludeClientIds(Iterable<String> elements);
+
+	    Builder addAllExcludeClientIds(Iterable<String> elements);
+
+	    Builder jsonView(Class<?> jsonView);
+
+		Builder event(String event);
+
+		Builder data(Object data);
+
+		Builder retry(Duration retry);
+
+		Builder id(String id);
+
+		Builder comment(String comment);
+
+		SseEvent build();
 	}
 
 }

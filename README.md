@@ -142,10 +142,14 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 1.1.8 - November ??, 2019
+  * Resolves [Issue #12](https://github.com/ralscha/sse-eventbus/issues/12): Hide ImmutableSseEvent completely from public API
+
+
 ### 1.1.7 - May 24, 2018
   * Resolves [Issue #8](https://github.com/ralscha/sse-eventbus/issues/8): Fix handling messages containing a new line character \n
   
-  * Resolves [Issue #6](https://github.com/ralscha/sse-eventbus/issues/6): Make members of DefaultSseEventBusConfiguration protected for easier subclassing 
+  * Resolves [Issue #6](https://github.com/ralscha/sse-eventbus/issues/6): Make members of DefaultSseEventBusConfiguration protected for easier sub classing 
   
 
 ### 1.1.6 - March 21, 2018

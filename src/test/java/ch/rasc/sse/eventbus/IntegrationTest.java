@@ -110,7 +110,7 @@ public class IntegrationTest {
 	@Test
 	public void testOneClientOneEventAdditionalInfo() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
-		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
+		SseEvent sseEvent = SseEvent.builder().event("eventName")
 				.data("the data line").id("123").retry(Duration.ofMillis(1000L))
 				.comment("the comment").build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -121,7 +121,7 @@ public class IntegrationTest {
 	@Test
 	public void testOneClientOneDirectEvent() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("1")
+		SseEvent sseEvent = SseEvent.builder().addClientId("1")
 				.event("eventName").data("payload").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, "event:eventName", "data:payload");
@@ -137,7 +137,7 @@ public class IntegrationTest {
 	@Test
 	public void testOneClientOneDirectEventToSomebodyElse() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2")
+		SseEvent sseEvent = SseEvent.builder().addClientId("2")
 				.event("eventName").data("payload").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, "");
@@ -156,7 +156,7 @@ public class IntegrationTest {
 	public void testOneClientTwoDirectEvents() throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("1")
+		SseEvent sseEvent = SseEvent.builder().addClientId("1")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addClientId("1").event("eventName").data("payload2")
@@ -172,7 +172,7 @@ public class IntegrationTest {
 			throws IOException {
 		Response sseResponse = registerSubscribe("1", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("1")
+		SseEvent sseEvent = SseEvent.builder().addClientId("1")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
@@ -208,7 +208,7 @@ public class IntegrationTest {
 		Response sseResponse1 = registerSubscribe("1", "eventName");
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientId("2")
+		SseEvent sseEvent = SseEvent.builder().addClientId("2")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
@@ -227,7 +227,7 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
+		SseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addClientIds("2", "3").event("eventName")
@@ -246,7 +246,7 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
+		SseEvent sseEvent = SseEvent.builder().addClientIds("2", "3")
 				.addExcludeClientIds("2", "1").event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addClientIds("2", "3")
@@ -266,7 +266,7 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientId("2")
+		SseEvent sseEvent = SseEvent.builder().addExcludeClientId("2")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addExcludeClientId("1").event("eventName")
@@ -284,7 +284,7 @@ public class IntegrationTest {
 		Response sseResponse2 = registerSubscribe("2", "eventName");
 		Response sseResponse3 = registerSubscribe("3", "eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().addExcludeClientIds("2", "3")
+		SseEvent sseEvent = SseEvent.builder().addExcludeClientIds("2", "3")
 				.event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().addExcludeClientIds("1", "3").event("eventName")
@@ -304,7 +304,7 @@ public class IntegrationTest {
 		subscribe("1", "event1");
 		subscribe("1", "event2");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().event("event1").data("payload")
+		SseEvent sseEvent = SseEvent.builder().event("event1").data("payload")
 				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, "event:event1", "data:payload");
@@ -323,7 +323,7 @@ public class IntegrationTest {
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
 		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 
-		ImmutableSseEvent sseEvent = SseEvent.builder().event("eventName")
+		SseEvent sseEvent = SseEvent.builder().event("eventName")
 				.data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().event("eventName").data("payload2").build();
