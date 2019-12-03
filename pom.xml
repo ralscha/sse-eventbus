@@ -251,6 +251,7 @@
 						<exclude>mvnw</exclude>
 						<exclude>.apt_generated/**</exclude>
 						<exclude>.editorconfig</exclude>
+						<exclude>.github/**</exclude>
 					</excludes>
 					<strictCheck>true</strictCheck>
 				</configuration>
