@@ -139,7 +139,7 @@
 			<plugin>
 				<groupId>io.spring.javaformat</groupId>
 				<artifactId>spring-javaformat-maven-plugin</artifactId>
-				<version>0.0.15</version>
+				<version>0.0.17</version>
 			</plugin>
 
 			<plugin>
