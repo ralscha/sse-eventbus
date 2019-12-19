@@ -45,6 +45,10 @@ public class ClientEvent {
 		return this.event;
 	}
 
+	public String getConvertedValue() {
+		return this.convertedValue;
+	}
+
 	public SseEventBuilder createSseEventBuilder() {
 
 		SseEventBuilder sseBuilder = SseEmitter.event();
@@ -75,7 +79,7 @@ public class ClientEvent {
 
 	}
 
-	public void incErrorCounter() {
+	void incErrorCounter() {
 		this.errorCounter++;
 	}
 

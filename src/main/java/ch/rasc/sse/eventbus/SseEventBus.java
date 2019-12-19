@@ -58,6 +58,8 @@ public class SseEventBus {
 
 	private final BlockingQueue<ClientEvent> sendQueue;
 
+	private final SseEventBusListener listener;
+
 	public SseEventBus(SseEventBusConfigurer configurer,
 			SubscriptionRegistry subscriptionRegistry) {
 
@@ -71,6 +73,8 @@ public class SseEventBus {
 
 		this.errorQueue = configurer.errorQueue();
 		this.sendQueue = configurer.sendQueue();
+
+		this.listener = configurer.listener();
 
 		this.taskScheduler.submit(this::eventLoop);
 		this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
@@ -214,8 +218,10 @@ public class SseEventBus {
 					if (!event.excludeClientIds().contains(client.getId())
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(
 									client.getId(), event.event())) {
-						this.sendQueue
-								.put(new ClientEvent(client, event, convertedValue));
+						ClientEvent clientEvent = new ClientEvent(client, event,
+								convertedValue);
+						this.sendQueue.put(clientEvent);
+						this.listener.afterEventQueued(clientEvent, true);
 					}
 				}
 			}
@@ -223,8 +229,10 @@ public class SseEventBus {
 				for (String clientId : event.clientIds()) {
 					if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
 							event.event())) {
-						this.sendQueue.put(new ClientEvent(this.clients.get(clientId),
-								event, convertedValue));
+						ClientEvent clientEvent = new ClientEvent(
+								this.clients.get(clientId), event, convertedValue);
+						this.sendQueue.put(clientEvent);
+						this.listener.afterEventQueued(clientEvent, true);
 					}
 				}
 			}
@@ -244,6 +252,7 @@ public class SseEventBus {
 					sseClientEvent.getSseEvent().event())) {
 				try {
 					this.sendQueue.put(sseClientEvent);
+					this.listener.afterEventQueued(sseClientEvent, false);
 				}
 				catch (InterruptedException e) {
 					throw new RuntimeException(e);
@@ -258,17 +267,22 @@ public class SseEventBus {
 				ClientEvent clientEvent = this.sendQueue.take();
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
 					Client client = clientEvent.getClient();
-					boolean ok = sendEventToClient(clientEvent);
-					if (ok) {
+					Exception e = sendEventToClient(clientEvent);
+					if (e == null) {
 						client.updateLastTransfer();
+						this.listener.afterEventSent(clientEvent, null);
 					}
 					else {
 						clientEvent.incErrorCounter();
 						this.errorQueue.put(clientEvent);
+						this.listener.afterEventSent(clientEvent, e);
 					}
 				}
 				else {
-					this.unregisterClient(clientEvent.getClient().getId());
+					String clientId = clientEvent.getClient().getId();
+					this.unregisterClient(clientId);
+					this.listener
+							.afterClientsUnregistered(Collections.singleton(clientId));
 				}
 			}
 		}
@@ -277,17 +291,17 @@ public class SseEventBus {
 		}
 	}
 
-	private static boolean sendEventToClient(ClientEvent clientEvent) {
+	private static Exception sendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
 			client.sseEmitter().send(clientEvent.createSseEventBuilder());
 			if (client.isCompleteAfterMessage()) {
 				client.sseEmitter().complete();
 			}
-			return true;
+			return null;
 		}
 		catch (Exception e) {
-			return false;
+			return e;
 		}
 
 	}
@@ -316,6 +330,7 @@ public class SseEventBus {
 				}
 			}
 			staleClients.forEach(this::unregisterClient);
+			this.listener.afterClientsUnregistered(staleClients);
 		}
 	}
 
