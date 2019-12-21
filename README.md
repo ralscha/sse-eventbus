@@ -109,7 +109,7 @@ The library is hosted on the Central Maven Repository
 	<dependency>
 		<groupId>ch.rasc</groupId>
 		<artifactId>sse-eventbus</artifactId>
-		<version>1.1.7</version>
+		<version>1.1.8</version>
 	</dependency>	
 ```
 
@@ -141,7 +141,9 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
-### 1.1.8 - November ??, 2019
+### 1.1.8 - December 21, 2019
+  * Resolves [Issue #13](https://github.com/ralscha/sse-eventbus/issues/13): Add lifecycle hooks
+  
   * Resolves [Issue #12](https://github.com/ralscha/sse-eventbus/issues/12): Hide ImmutableSseEvent completely from public API
 
 
