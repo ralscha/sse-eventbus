@@ -123,7 +123,7 @@ public class ListenerTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventBus.handleEvent(sseEvent);
 
-		sleep(50, TimeUnit.MILLISECONDS);
+		sleep(5, TimeUnit.MILLISECONDS);
 
 		sseResponse = registerSubscribe("1", "eventName");
 		assertSseResponse(sseResponse, "event:eventName", "data:payload1", "",
