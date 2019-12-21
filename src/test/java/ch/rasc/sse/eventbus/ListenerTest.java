@@ -57,6 +57,7 @@ public class ListenerTest {
 	@Before
 	public void cleanup() {
 		this.eventBus.unregisterClient("1");
+		this.eventBus.unregisterClient("2");
 		this.testListener.reset();
 	}
 
