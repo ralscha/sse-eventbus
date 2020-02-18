@@ -17,7 +17,7 @@ package ch.rasc.sse.eventbus;
 
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-class Client {
+public class Client {
 
 	private final String id;
 
