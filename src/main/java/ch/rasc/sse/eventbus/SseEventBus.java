@@ -285,32 +285,58 @@ public class SseEventBus {
 	}
 
 	private void eventLoop() {
-		try {
-			while (true) {
+		while (true) {
+			try {
 				ClientEvent clientEvent = this.sendQueue.take();
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
 					Client client = clientEvent.getClient();
 					Exception e = sendEventToClient(clientEvent);
 					if (e == null) {
 						client.updateLastTransfer();
-						this.listener.afterEventSent(clientEvent, null);
+						try {
+							this.listener.afterEventSent(clientEvent, null);
+						}
+						catch (Exception ex) {
+							LogFactory.getLog(SseEventBus.class)
+									.error("calling afterEventSent hook failed", ex);
+						}
 					}
 					else {
 						clientEvent.incErrorCounter();
-						this.errorQueue.put(clientEvent);
-						this.listener.afterEventSent(clientEvent, e);
+						try {
+							this.errorQueue.put(clientEvent);
+						}
+						catch (InterruptedException ie) {
+							throw new RuntimeException(ie);
+						}
+						try {
+							this.listener.afterEventSent(clientEvent, e);
+						}
+						catch (Exception ex) {
+							LogFactory.getLog(SseEventBus.class)
+									.error("calling afterEventSent hook failed", ex);
+						}
 					}
 				}
 				else {
 					String clientId = clientEvent.getClient().getId();
 					this.unregisterClient(clientId);
-					this.listener
-							.afterClientsUnregistered(Collections.singleton(clientId));
+					try {
+						this.listener.afterClientsUnregistered(
+								Collections.singleton(clientId));
+					}
+					catch (Exception ex) {
+						LogFactory.getLog(SseEventBus.class).error(
+								"calling afterClientsUnregistered hook failed", ex);
+					}
 				}
 			}
-		}
-		catch (InterruptedException e) {
-			throw new RuntimeException(e);
+			catch (InterruptedException ie) {
+				throw new RuntimeException(ie);
+			}
+			catch (Exception ex) {
+				LogFactory.getLog(SseEventBus.class).error("eventLoop run failed", ex);
+			}
 		}
 	}
 
