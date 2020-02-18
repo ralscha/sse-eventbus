@@ -141,7 +141,7 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
-### 1.1.9 - February xx, 2020
+### 1.1.9 - February 18, 2020
   * Catch and log exceptions in event loop. Prevents the loop to terminate.
 
 
