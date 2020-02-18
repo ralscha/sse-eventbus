@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
 
+import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -243,21 +244,43 @@ public class SseEventBus {
 	}
 
 	private void reScheduleFailedEvents() {
-		List<ClientEvent> failedEvents = new ArrayList<>();
-		this.errorQueue.drainTo(failedEvents);
+		try {
+			List<ClientEvent> failedEvents = new ArrayList<>();
+			this.errorQueue.drainTo(failedEvents);
 
-		for (ClientEvent sseClientEvent : failedEvents) {
-			if (this.subscriptionRegistry.isClientSubscribedToEvent(
-					sseClientEvent.getClient().getId(),
-					sseClientEvent.getSseEvent().event())) {
-				try {
-					this.sendQueue.put(sseClientEvent);
-					this.listener.afterEventQueued(sseClientEvent, false);
-				}
-				catch (InterruptedException e) {
-					throw new RuntimeException(e);
+			for (ClientEvent sseClientEvent : failedEvents) {
+				if (this.subscriptionRegistry.isClientSubscribedToEvent(
+						sseClientEvent.getClient().getId(),
+						sseClientEvent.getSseEvent().event())) {
+					try {
+						this.sendQueue.put(sseClientEvent);
+						try {
+							this.listener.afterEventQueued(sseClientEvent, false);
+						}
+						catch (Exception e) {
+							LogFactory.getLog(SseEventBus.class)
+									.error("calling afterEventQueued hook failed", e);
+						}
+					}
+					catch (InterruptedException ie) {
+						throw new RuntimeException(ie);
+					}
+					catch (Exception e) {
+						LogFactory.getLog(SseEventBus.class)
+								.error("re-adding event into send queue failed", e);
+						try {
+							this.errorQueue.put(sseClientEvent);
+						}
+						catch (InterruptedException ie) {
+							throw new RuntimeException(ie);
+						}
+					}
 				}
 			}
+		}
+		catch (Exception e) {
+			LogFactory.getLog(SseEventBus.class).error("reScheduleFailedEvents failed",
+					e);
 		}
 	}
 
