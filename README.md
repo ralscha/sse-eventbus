@@ -13,7 +13,7 @@ Enable support by adding ```@EnableSseEventBus``` to a Spring application.
 @SpringBootApplication
 @EnableSseEventBus
 public class Application {
-    ...
+  ...
 }
 ```
 
