@@ -1,5 +1,5 @@
 /**
- * Copyright 2016-2021 the original author or authors.
+ * Copyright 2016-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,8 @@ public class TestController {
 	@GetMapping("/register/{id}/{event}")
 	public SseEmitter eventbus(@PathVariable("id") String id,
 			@PathVariable("event") String event) {
-		return this.eventBus.createSseEmitter(id, 3_000L, event.split(","));
+		System.out.println("HERE: " + event + " client id: " + id);
+		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
 	}
 
 	@GetMapping("/registerOnly/{id}/{event}")

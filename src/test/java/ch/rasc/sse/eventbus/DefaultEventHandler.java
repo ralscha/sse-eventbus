@@ -15,32 +15,28 @@
  */
 package ch.rasc.sse.eventbus;
 
-public class TestObject2 {
+import com.launchdarkly.eventsource.EventHandler;
 
-	private long id;
+public interface DefaultEventHandler extends EventHandler {
 
-	private String customer;
+  @Override
+  default void onOpen() throws Exception {
+    // nothing here
+  }
 
-	public TestObject2(long id, String customer) {
-		super();
-		this.id = id;
-		this.customer = customer;
-	}
+  @Override
+  default void onClosed() throws Exception {
+    // nothing here
+  }
 
-	public long getId() {
-		return this.id;
-	}
+  @Override
+  default void onComment(String comment) throws Exception {
+    // nothing here
+  }
 
-	public void setId(long id) {
-		this.id = id;
-	}
-
-	public String getCustomer() {
-		return this.customer;
-	}
-
-	public void setCustomer(String customer) {
-		this.customer = customer;
-	}
+  @Override
+  default void onError(Throwable t) {
+    // nothing here
+  }
 
 }

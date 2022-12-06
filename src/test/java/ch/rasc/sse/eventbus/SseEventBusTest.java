@@ -1,5 +1,5 @@
 /**
- * Copyright 2016-2021 the original author or authors.
+ * Copyright 2016-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,23 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import ch.rasc.sse.eventbus.config.EnableSseEventBus;
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 
-@RunWith(SpringRunner.class)
 @ContextConfiguration
 @SuppressWarnings("unchecked")
 @DirtiesContext
+@SpringJUnitConfig
 public class SseEventBusTest {
 
 	@Configuration
@@ -60,7 +59,7 @@ public class SseEventBusTest {
 	@Autowired
 	private SseEventBus eventBus;
 
-	@Before
+	@BeforeEach
 	public void cleanup() {
 		this.eventBus.unregisterClient("1");
 		this.eventBus.unregisterClient("2");
