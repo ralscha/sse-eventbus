@@ -85,7 +85,7 @@ public class IntegrationTest {
 	@Test
 	public void testRegisterAndSubscribe() throws IOException, InterruptedException {
 		SubscribeResponse sseResponse = registerAndSubscribe("1", "message", 1);
-		TimeUnit.SECONDS.sleep(3);
+		sleep(3, TimeUnit.SECONDS);
 		this.eventPublisher.publishEvent(SseEvent.ofData("regandsub"));
 		assertSseResponse(sseResponse, new ResponseData("message", "regandsub"));
 		sseResponse.eventSource().close();
@@ -95,9 +95,9 @@ public class IntegrationTest {
 	@Disabled
 	public void testRegisterAndSubscribeOnly() throws IOException, InterruptedException {
 		SubscribeResponse sseResponse1 = registerAndSubscribeOnly("1", "event1", 2);
-		TimeUnit.SECONDS.sleep(3);
+		sleep(3, TimeUnit.SECONDS);
 		SubscribeResponse sseResponse2 = registerAndSubscribe("1", "event2", 2);
-		TimeUnit.SECONDS.sleep(3);
+		sleep(3, TimeUnit.SECONDS);
 
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("event1", "event2");
@@ -495,6 +495,7 @@ public class IntegrationTest {
 	@Test
 	public void testJsonConverter() throws IOException {
 		SubscribeResponse sseResponse = registerSubscribe("1", "to1");
+		sleep(1, TimeUnit.SECONDS);
 		TestObject1 to1 = new TestObject1(101L, "john doe");
 
 		this.eventPublisher.publishEvent(SseEvent.of("to1", to1));
