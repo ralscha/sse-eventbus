@@ -174,7 +174,8 @@ public class IntegrationTest {
 
 	@Test
 	public void testOneClientTwoEvents() throws IOException {
-		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", false, 2);
+		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", false, 2,
+				true);
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload2"));
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
@@ -184,7 +185,8 @@ public class IntegrationTest {
 
 	@Test
 	public void testOneClientTwoDirectEvents() throws IOException {
-		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", false, 2);
+		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", false, 2,
+				true);
 
 		SseEvent sseEvent = SseEvent.builder().addClientId("1").event("eventName")
 				.data("payload1").build();
@@ -230,8 +232,10 @@ public class IntegrationTest {
 
 	@Test
 	public void testTwoClientsTwoAllEvent() throws IOException {
-		SubscribeResponse sseResponse1 = registerSubscribe("1", "eventName", false, 2);
-		SubscribeResponse sseResponse2 = registerSubscribe("2", "eventName", false, 2);
+		SubscribeResponse sseResponse1 = registerSubscribe("1", "eventName", false, 2,
+				true);
+		SubscribeResponse sseResponse2 = registerSubscribe("2", "eventName", false, 2,
+				true);
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload2"));
 		assertSseResponse(sseResponse1, new ResponseData("eventName", "payload1"),
@@ -374,7 +378,8 @@ public class IntegrationTest {
 	@Test
 	@Disabled
 	public void testReconnect() throws IOException {
-		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", true, 1);
+		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", true, 1,
+				true);
 		sleep(2, TimeUnit.SECONDS);
 		// assertSseResponseWithException(sseResponse);
 		sleep(2, TimeUnit.SECONDS);
@@ -435,7 +440,7 @@ public class IntegrationTest {
 
 	@Test
 	public void testClientExpiration() throws IOException {
-		var response = registerSubscribe("1", "eventName", true, 1);
+		var response = registerSubscribe("1", "eventName", true, 1, true);
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
@@ -460,12 +465,14 @@ public class IntegrationTest {
 	public void testMany() throws IOException {
 		List<SubscribeResponse> responses = new ArrayList<>();
 		for (int i = 0; i < 100; i++) {
-			responses.add(registerSubscribe(String.valueOf(i), "eventName"));
+			responses.add(
+					registerSubscribe(String.valueOf(i), "eventName", false, 1, false));
 		}
 		for (int i = 100; i < 120; i++) {
-			responses.add(registerSubscribe(String.valueOf(i), "eventName", true, 1));
+			responses.add(
+					registerSubscribe(String.valueOf(i), "eventName", true, 1, false));
 		}
-		sleep(1, TimeUnit.SECONDS);
+		sleep(3, TimeUnit.SECONDS);
 
 		assertThat(this.eventBus.getAllClientIds()).hasSize(120);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
@@ -627,16 +634,17 @@ public class IntegrationTest {
 
 	private SubscribeResponse registerSubscribe(String clientId, String eventName)
 			throws IOException {
-		return registerSubscribe(clientId, eventName, false, 1);
+		return registerSubscribe(clientId, eventName, false, 1, true);
 	}
 
 	private SubscribeResponse registerSubscribe(String clientId, String eventName,
 			int expectedNoOfData) throws IOException {
-		return registerSubscribe(clientId, eventName, false, expectedNoOfData);
+		return registerSubscribe(clientId, eventName, false, expectedNoOfData, true);
 	}
 
 	private SubscribeResponse registerSubscribe(String clientId, String eventName,
-			boolean shortTimeout, int expectedNoOfData) throws IOException {
+			boolean shortTimeout, int expectedNoOfData, boolean sleep)
+			throws IOException {
 
 		CompletableFuture<List<ResponseData>> dataFuture = new CompletableFuture<>();
 		List<ResponseData> responses = new ArrayList<>();
@@ -661,7 +669,9 @@ public class IntegrationTest {
 				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 				.execute();
 
-		sleep(333, TimeUnit.MILLISECONDS);
+		if (sleep) {
+			sleep(333, TimeUnit.MILLISECONDS);
+		}
 
 		return new SubscribeResponse(eventSource, dataFuture);
 	}
