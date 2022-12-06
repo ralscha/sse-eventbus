@@ -237,6 +237,7 @@ public class ListenerTest {
 		client.newCall(new Request.Builder().get()
 				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 				.execute();
+		sleep(333, TimeUnit.MILLISECONDS);
 		return new SubscribeResponse(eventSource, dataFuture);
 	}
 

@@ -689,7 +689,6 @@ public class IntegrationTest {
 		List<ResponseData> responses = new ArrayList<>();
 		EventSource.Builder builder = new EventSource.Builder(
 				(DefaultEventHandler) (event, messageEvent) -> {
-					System.out.println(event);
 					responses.add(new ResponseData(event, messageEvent.getData()));
 					if (responses.size() == expectedNoOfData) {
 						dataFuture.complete(responses);
