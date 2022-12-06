@@ -61,9 +61,9 @@ public class IntegrationTest {
 
 	@BeforeEach
 	public void cleanup() {
-		this.eventBus.unregisterClient("1");
-		this.eventBus.unregisterClient("2");
-		this.eventBus.unregisterClient("3");
+		for (String clientId : this.eventBus.getAllClientIds()) {
+			this.eventBus.unregisterClient(clientId);
+		}
 	}
 
 	@Test

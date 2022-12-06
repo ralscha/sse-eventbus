@@ -38,7 +38,6 @@ public class TestController {
 	@GetMapping("/register/{id}/{event}")
 	public SseEmitter eventbus(@PathVariable("id") String id,
 			@PathVariable("event") String event) {
-		System.out.println("HERE: " + event + " client id: " + id);
 		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
 	}
 
