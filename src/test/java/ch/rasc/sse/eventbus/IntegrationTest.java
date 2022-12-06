@@ -495,7 +495,6 @@ public class IntegrationTest {
 	@Test
 	public void testJsonConverter() throws IOException {
 		SubscribeResponse sseResponse = registerSubscribe("1", "to1");
-		sleep(1, TimeUnit.SECONDS);
 		TestObject1 to1 = new TestObject1(101L, "john doe");
 
 		this.eventPublisher.publishEvent(SseEvent.of("to1", to1));
@@ -661,6 +660,9 @@ public class IntegrationTest {
 		client.newCall(new Request.Builder().get()
 				.url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 				.execute();
+
+		sleep(333, TimeUnit.MILLISECONDS);
+
 		return new SubscribeResponse(eventSource, dataFuture);
 	}
 
