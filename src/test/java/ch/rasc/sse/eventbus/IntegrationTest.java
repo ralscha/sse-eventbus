@@ -71,6 +71,7 @@ public class IntegrationTest {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload"));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -78,6 +79,7 @@ public class IntegrationTest {
 		SubscribeResponse sseResponse = registerSubscribe("1", "message");
 		this.eventPublisher.publishEvent(SseEvent.ofData("payload"));
 		assertSseResponse(sseResponse, new ResponseData("message", "payload"));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -86,6 +88,7 @@ public class IntegrationTest {
 		TimeUnit.SECONDS.sleep(3);
 		this.eventPublisher.publishEvent(SseEvent.ofData("regandsub"));
 		assertSseResponse(sseResponse, new ResponseData("message", "regandsub"));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -101,8 +104,9 @@ public class IntegrationTest {
 		assertThat(this.eventBus.hasSubscribers("event1")).isTrue();
 		assertThat(this.eventBus.getSubscribers("event2")).containsOnly("1");
 		assertThat(this.eventBus.countSubscribers("event1")).isEqualTo(1);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("event1", "event2");
-		
+		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("event1",
+				"event2");
+
 		this.eventPublisher.publishEvent(SseEvent.of("event1", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("event2", "payload2"));
 
@@ -115,6 +119,9 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("event3", "payload3"));
 
 		assertSseResponse(sseResponse, new ResponseData("event3", "payload3"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
 	}
 
 	@Test
@@ -122,6 +129,7 @@ public class IntegrationTest {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.ofEvent("eventName"));
 		assertSseResponse(sseResponse, new ResponseData("eventName", ""));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -133,6 +141,7 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse, new ResponseData("eventName", "the data line"));
 		// "id:123", "retry:1000",
 		// ":the comment", "data:the data line");
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -142,6 +151,7 @@ public class IntegrationTest {
 				.data("payload").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload"));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -149,6 +159,7 @@ public class IntegrationTest {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventNameSecond", "payload"));
 		assertSseResponse(sseResponse);
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -158,6 +169,7 @@ public class IntegrationTest {
 				.data("payload").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse);
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -167,6 +179,7 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload2"));
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -182,6 +195,8 @@ public class IntegrationTest {
 
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -197,6 +212,8 @@ public class IntegrationTest {
 				.build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -206,6 +223,9 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload1"));
 		assertSseResponse(sseResponse1, new ResponseData("eventName", "payload1"));
 		assertSseResponse(sseResponse2, new ResponseData("eventName", "payload1"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
 	}
 
 	@Test
@@ -218,6 +238,9 @@ public class IntegrationTest {
 				new ResponseData("eventName", "payload2"));
 		assertSseResponse(sseResponse2, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
 	}
 
 	@Test
@@ -236,6 +259,9 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse1);
 		assertSseResponse(sseResponse2, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
 	}
 
 	@Test
@@ -255,6 +281,10 @@ public class IntegrationTest {
 				new ResponseData("eventName", "payload2"));
 		assertSseResponse(sseResponse3, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
+		sseResponse3.eventSource().close();
 	}
 
 	@Test
@@ -276,6 +306,10 @@ public class IntegrationTest {
 				new ResponseData("eventName", "payload2"));
 		assertSseResponse(sseResponse3, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
+		sseResponse3.eventSource().close();
 	}
 
 	@Test
@@ -294,6 +328,10 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse2, new ResponseData("eventName", "payload2"));
 		assertSseResponse(sseResponse3, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"));
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
+		sseResponse3.eventSource().close();
 	}
 
 	@Test
@@ -311,6 +349,10 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse1, new ResponseData("eventName", "payload1"));
 		assertSseResponse(sseResponse2, new ResponseData("eventName", "payload2"));
 		assertSseResponse(sseResponse3);
+
+		sseResponse1.eventSource().close();
+		sseResponse2.eventSource().close();
+		sseResponse3.eventSource().close();
 	}
 
 	@Test
@@ -325,6 +367,8 @@ public class IntegrationTest {
 		SseEvent sseEvent = SseEvent.builder().event("event1").data("payload").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		assertSseResponse(sseResponse, new ResponseData("event1", "payload"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -359,7 +403,7 @@ public class IntegrationTest {
 		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
 		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
-		
+
 		sseEvent = SseEvent.builder().event("eventName").data("payload4").build();
 		this.eventPublisher.publishEvent(sseEvent);
 		sseEvent = SseEvent.builder().event("eventName").data("payload5").build();
@@ -385,6 +429,8 @@ public class IntegrationTest {
 		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -406,6 +452,8 @@ public class IntegrationTest {
 		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
 		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+
+		response.eventSource().close();
 	}
 
 	@Test
@@ -452,6 +500,8 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("to1", to1));
 		assertSseResponse(sseResponse,
 				new ResponseData("to1", "{\"id\":101,\"name\":\"john doe\"}"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -461,6 +511,8 @@ public class IntegrationTest {
 
 		this.eventPublisher.publishEvent(SseEvent.ofData(to2));
 		assertSseResponse(sseResponse, new ResponseData("message", "999,sample inc."));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -474,6 +526,8 @@ public class IntegrationTest {
 		this.eventPublisher.publishEvent(SseEvent.of("jsonView1", to3));
 		assertSseResponse(sseResponse, new ResponseData("jsonView1",
 				"{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -490,6 +544,8 @@ public class IntegrationTest {
 
 		assertSseResponse(sseResponse, new ResponseData("jsonView1",
 				"{\"uuid\":\"abc\",\"publicInfo\":\"this is public\"}"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -504,6 +560,8 @@ public class IntegrationTest {
 				.jsonView(JsonViews.PRIVATE.class).build());
 		assertSseResponse(sseResponse, new ResponseData("jsonView1",
 				"{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}"));
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -511,6 +569,8 @@ public class IntegrationTest {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "1. line\n2. line"));
 		assertSseResponse(sseResponse, new ResponseData("eventName", "1. line\n2. line"));
+
+		sseResponse.eventSource().close();
 	}
 
 	private String testUrl(String path) {

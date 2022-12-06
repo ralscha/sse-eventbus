@@ -91,6 +91,8 @@ public class ListenerTest {
 		assertThat(this.testListener.getAfterEventQueued()).isEmpty();
 		assertThat(this.testListener.getAfterEventSentFail()).isEmpty();
 		assertThat(this.testListener.getAfterClientsUnregistered()).isEmpty();
+
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -107,7 +109,7 @@ public class ListenerTest {
 
 	@Test
 	public void testClientExpiration() throws IOException {
-		registerSubscribe("1", "eventName", true, 1);
+		var response = registerSubscribe("1", "eventName", true, 1);
 		sleep(21, TimeUnit.SECONDS);
 
 		assertThat(this.testListener.getAfterEventQueuedFirst()).isEmpty();
@@ -116,6 +118,8 @@ public class ListenerTest {
 		assertThat(this.testListener.getAfterEventSentFail()).isEmpty();
 		assertThat(this.testListener.getAfterClientsUnregistered()).hasSize(1);
 		assertThat(this.testListener.getAfterClientsUnregistered().get(0)).isEqualTo("1");
+
+		response.eventSource().close();
 	}
 
 	@Test
@@ -123,11 +127,11 @@ public class ListenerTest {
 	public void testReconnect() throws IOException {
 		var sseResponse = registerSubscribe("1", "eventName", true, 3);
 		sleep(2, TimeUnit.SECONDS);
-//		assertSseResponseWithException(sseResponse);
-//		sleep(2, TimeUnit.SECONDS);
+		// assertSseResponseWithException(sseResponse);
+		// sleep(2, TimeUnit.SECONDS);
 
-		SseEvent sseEvent = SseEvent.builder().event("eventName")
-				.data("payload1").build();
+		SseEvent sseEvent = SseEvent.builder().event("eventName").data("payload1")
+				.build();
 		this.eventBus.handleEvent(sseEvent);
 		sseEvent = SseEvent.builder().event("eventName").data("payload2").build();
 		this.eventBus.handleEvent(sseEvent);
@@ -137,9 +141,8 @@ public class ListenerTest {
 		sleep(5, TimeUnit.MILLISECONDS);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
-		assertSseResponse(sseResponse, 
-				new ResponseData("eventName", "payload1"),
-				new ResponseData("eventName", "payload2"), 
+		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
+				new ResponseData("eventName", "payload2"),
 				new ResponseData("eventName", "payload3"));
 
 		assertThat(this.testListener.getAfterEventQueuedFirst()).hasSize(3);
@@ -147,6 +150,8 @@ public class ListenerTest {
 		assertThat(this.testListener.getAfterEventQueued()).hasSize(3);
 		assertThat(this.testListener.getAfterEventSentFail()).hasSize(3);
 		assertThat(this.testListener.getAfterClientsUnregistered()).isEmpty();
+
+		sseResponse.eventSource().close();
 	}
 
 	private String testUrl(String path) {
