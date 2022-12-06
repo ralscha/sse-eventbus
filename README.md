@@ -1,6 +1,7 @@
-![Test Status](https://github.com/ralscha/sse-eventbus/workflows/test/badge.svg)
+[![Test Status](https://github.com/ralscha/sse-eventbus/actions/workflows/maven.yml/badge.svg)](https://github.com/ralscha/sse-eventbus/actions/workflows/maven.yml)
 
-sse-eventbus is a Java library that sits on top of [Spring's Sever-Sent Event support](https://docs.spring.io/spring/docs/current/spring-framework-reference/web.html#mvc-ann-async-sse).   
+
+sse-eventbus is a Java library that sits on top of [Spring's Sever-Sent Event support](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-ann-async-sse).   
 It keeps track of connected clients and broadcasts events to them.
 
 ## Usage
@@ -140,6 +141,10 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 
 ## Changelog
+
+### 2.0.0 - December ??, 2022
+  * Upgrade to Spring 6 (javax. -> jakarta.)
+
 
 ### 1.1.9 - February 18, 2020
   * Catch and log exceptions in event loop. Prevents the loop to terminate.
