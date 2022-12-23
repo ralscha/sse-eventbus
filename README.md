@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
   <dependency>
     <groupId>ch.rasc</groupId>
     <artifactId>sse-eventbus</artifactId>
-    <version>1.1.9</version>
+    <version>2.0.0</version>
   </dependency>  
 ```
 
@@ -142,7 +142,7 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
-### 2.0.0 - December ??, 2022
+### 2.0.0 - December 6, 2022
   * Upgrade to Spring 6 (javax. -> jakarta.)
 
 
