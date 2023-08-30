@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ContextConfiguration
@@ -43,6 +44,7 @@ public class SseEventBusTest {
 	@Configuration
 	@EnableSseEventBus
 	static class Config implements SseEventBusConfigurer {
+
 
 		@Override
 		public Duration clientExpiration() {
@@ -241,15 +243,6 @@ public class SseEventBusTest {
 		this.eventBus.subscribeOnly("1", "two");
 		assertThat(this.eventBus.getAllEvents()).containsOnly("two");
 		assertThat(this.eventBus.getSubscribers("two")).containsExactly("1", "2");
-	}
-
-	private static void sleep(long value, TimeUnit timeUnit) {
-		try {
-			timeUnit.sleep(value);
-		}
-		catch (InterruptedException e) {
-			// nothing here
-		}
 	}
 
 }
