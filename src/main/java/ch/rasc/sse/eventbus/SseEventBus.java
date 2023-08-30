@@ -1,12 +1,12 @@
 /**
  * Copyright 2016-2022 the original author or authors.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,27 +15,19 @@
  */
 package ch.rasc.sse.eventbus;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import jakarta.annotation.PreDestroy;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
-import jakarta.annotation.PreDestroy;
+import java.time.Duration;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class SseEventBus {
 
@@ -61,31 +53,34 @@ public class SseEventBus {
 	private final SseEventBusListener listener;
 
 	public SseEventBus(SseEventBusConfigurer configurer,
-			SubscriptionRegistry subscriptionRegistry) {
+										 SubscriptionRegistry subscriptionRegistry) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
-		this.taskScheduler = configurer.taskScheduler();
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
 		this.clientExpiration = configurer.clientExpiration();
 
-		this.clients = new ConcurrentHashMap<>();
+		this.clients = configurer.clients();
 
 		this.errorQueue = configurer.errorQueue();
 		this.sendQueue = configurer.sendQueue();
 
 		this.listener = configurer.listener();
 
-		this.taskScheduler.submit(this::eventLoop);
-		this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
-				configurer.schedulerDelay().toMillis(), TimeUnit.MILLISECONDS);
-		this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0,
-				configurer.clientExpirationJobDelay().toMillis(), TimeUnit.MILLISECONDS);
+		this.taskScheduler = configurer.taskScheduler();
+		if (this.taskScheduler != null) {
+			this.taskScheduler.submit(this::eventLoop);
+			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
+																								configurer.schedulerDelay().toMillis(), TimeUnit.MILLISECONDS);
+			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0,
+																								configurer.clientExpirationJobDelay().toMillis(), TimeUnit.MILLISECONDS);
+		}
 	}
 
 	@PreDestroy
 	public void cleanUp() {
-		this.taskScheduler.shutdownNow();
+		if (this.taskScheduler != null)
+			this.taskScheduler.shutdownNow();
 	}
 
 	public SseEmitter createSseEmitter(String clientId) {
@@ -97,7 +92,7 @@ public class SseEventBus {
 	}
 
 	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe,
-			String... events) {
+																		 String... events) {
 		return createSseEmitter(clientId, 180_000L, unsubscribe, false, events);
 	}
 
@@ -106,7 +101,7 @@ public class SseEventBus {
 	}
 
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
-			String... events) {
+																		 String... events) {
 		return createSseEmitter(clientId, timeout, unsubscribe, false, events);
 	}
 
@@ -121,7 +116,7 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
-			boolean completeAfterMessage, String... events) {
+																		 boolean completeAfterMessage, String... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
 		registerClient(clientId, emitter, completeAfterMessage);
@@ -143,11 +138,11 @@ public class SseEventBus {
 	}
 
 	public void registerClient(String clientId, SseEmitter emitter,
-			boolean completeAfterMessage) {
+														 boolean completeAfterMessage) {
 		Client client = this.clients.get(clientId);
 		if (client == null) {
 			this.clients.put(clientId,
-					new Client(clientId, emitter, completeAfterMessage));
+											 new Client(clientId, emitter, completeAfterMessage));
 		}
 		else {
 			client.updateEmitter(emitter);
@@ -191,9 +186,7 @@ public class SseEventBus {
 		Set<String> keepEventsSet = null;
 		if (keepEvents != null && keepEvents.length > 0) {
 			keepEventsSet = new HashSet<>();
-			for (String keepEvent : keepEvents) {
-				keepEventsSet.add(keepEvent);
-			}
+			Collections.addAll(keepEventsSet, keepEvents);
 		}
 
 		Set<String> events = this.subscriptionRegistry.getAllEvents();
@@ -217,9 +210,9 @@ public class SseEventBus {
 				for (Client client : this.clients.values()) {
 					if (!event.excludeClientIds().contains(client.getId())
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(
-									client.getId(), event.event())) {
+							client.getId(), event.event())) {
 						ClientEvent clientEvent = new ClientEvent(client, event,
-								convertedValue);
+																											convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
 					}
@@ -228,7 +221,7 @@ public class SseEventBus {
 			else {
 				for (String clientId : event.clientIds()) {
 					if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
-							event.event())) {
+																																	event.event())) {
 						ClientEvent clientEvent = new ClientEvent(
 								this.clients.get(clientId), event, convertedValue);
 						this.sendQueue.put(clientEvent);
@@ -279,7 +272,7 @@ public class SseEventBus {
 		}
 		catch (Exception e) {
 			LogFactory.getLog(SseEventBus.class).error("reScheduleFailedEvents failed",
-					e);
+																								 e);
 		}
 	}
 
