@@ -65,6 +65,7 @@ public class SseEventBusSchedulerTest {
 		public ScheduledExecutorService taskScheduler() {
 			return null;
 		}
+
 	}
 
 	@Autowired
@@ -101,4 +102,5 @@ public class SseEventBusSchedulerTest {
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 	}
+
 }

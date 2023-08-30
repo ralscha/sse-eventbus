@@ -39,8 +39,7 @@ public class JacksonDataObjectConverter implements DataObjectConverter {
 					return this.objectMapper.writeValueAsString(event.data());
 				}
 
-				return this.objectMapper.writerWithView(event.jsonView().get())
-						.writeValueAsString(event.data());
+				return this.objectMapper.writerWithView(event.jsonView().get()).writeValueAsString(event.data());
 			}
 			catch (JsonProcessingException e) {
 				throw new RuntimeException(e);

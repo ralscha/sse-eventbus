@@ -25,9 +25,13 @@ import org.springframework.stereotype.Component;
 public class TestListener implements SseEventBusListener {
 
 	private List<ClientEvent> afterEventQueuedFirst = new ArrayList<>();
+
 	private List<ClientEvent> afterEventQueued = new ArrayList<>();
+
 	private List<ClientEvent> afterEventSentOk = new ArrayList<>();
+
 	private List<ClientEvent> afterEventSentFail = new ArrayList<>();
+
 	private List<String> afterClientsUnregistered = new ArrayList<>();
 
 	@Override
@@ -82,4 +86,5 @@ public class TestListener implements SseEventBusListener {
 		this.afterEventSentFail = new ArrayList<>();
 		this.afterClientsUnregistered = new ArrayList<>();
 	}
+
 }

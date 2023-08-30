@@ -86,7 +86,9 @@ public interface SseEventBusConfigurer {
 		return new LinkedBlockingQueue<>();
 	}
 
-	default ConcurrentMap<String, Client> clients() {return new ConcurrentHashMap<>();}
+	default ConcurrentMap<String, Client> clients() {
+		return new ConcurrentHashMap<>();
+	}
 
 	default SseEventBusListener listener() {
 		return new SseEventBusListener() {

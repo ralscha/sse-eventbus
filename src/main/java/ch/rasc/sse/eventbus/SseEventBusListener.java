@@ -50,4 +50,5 @@ public interface SseEventBusListener {
 	default void afterClientsUnregistered(Set<String> clientIds) {
 		// no default implementation
 	}
+
 }
