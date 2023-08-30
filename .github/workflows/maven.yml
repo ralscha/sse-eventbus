@@ -9,12 +9,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Java 19
+    - name: Set up Java 20
       uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
-        java-version: '17'
-    - name: Build with Java 19
+        java-version: '20'
+    - name: Build with Java 20
       run: ./mvnw -B clean test --file pom.xml        
     - name: Set up Java 17
       uses: actions/setup-java@v3
