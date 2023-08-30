@@ -15,19 +15,26 @@
  */
 package ch.rasc.sse.eventbus;
 
-import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
-import jakarta.annotation.PreDestroy;
-import org.apache.commons.logging.LogFactory;
-import org.springframework.context.event.EventListener;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.commons.logging.LogFactory;
+import org.springframework.context.event.EventListener;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import jakarta.annotation.PreDestroy;
 
 public class SseEventBus {
 
