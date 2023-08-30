@@ -15,12 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
+import ch.rasc.sse.eventbus.config.EnableSseEventBus;
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,17 +24,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import ch.rasc.sse.eventbus.config.EnableSseEventBus;
-import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ContextConfiguration
-@SuppressWarnings("unchecked")
 @DirtiesContext
 @SpringJUnitConfig
 public class SseEventBusTest {
+
+	private static final ConcurrentMap<String, Client> CLIENTS_MAP = new ConcurrentHashMap<>();
 
 	@Configuration
 	@EnableSseEventBus
@@ -54,6 +54,10 @@ public class SseEventBusTest {
 			return 1;
 		}
 
+		@Override
+		public ConcurrentMap<String, Client> clients() {
+			return CLIENTS_MAP;
+		}
 	}
 
 	@Autowired
@@ -100,15 +104,15 @@ public class SseEventBusTest {
 		SseEmitter se1 = this.eventBus.createSseEmitter("1");
 		SseEmitter se2 = this.eventBus.createSseEmitter("2", 10_000L);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
 		sleep(1, TimeUnit.SECONDS);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
@@ -127,9 +131,9 @@ public class SseEventBusTest {
 		SseEmitter se3 = this.eventBus.createSseEmitter("3", "one", "three");
 
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2", "3");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
-		assertThat(internalClients().get("3").sseEmitter()).isEqualTo(se3);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("3").sseEmitter()).isEqualTo(se3);
 
 		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2",
 				"three");
@@ -197,8 +201,8 @@ public class SseEventBusTest {
 		SseEmitter se2 = this.eventBus.createSseEmitter("2", "one", "two", "three");
 
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 
 		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "three");
 		assertThat(this.eventBus.getSubscribers("one")).containsExactly("1", "2");
@@ -209,8 +213,8 @@ public class SseEventBusTest {
 		se2 = this.eventBus.createSseEmitter("2", true, "three", "four", "five");
 
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 
 		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "three", "four",
 				"five");
@@ -223,8 +227,8 @@ public class SseEventBusTest {
 		se2 = this.eventBus.createSseEmitter("2", true, "one");
 
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(internalClients().get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(internalClients().get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
+		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 
 		assertThat(this.eventBus.getAllEvents()).containsOnly("one");
 		assertThat(this.eventBus.getSubscribers("one")).containsExactly("1", "2");
@@ -237,11 +241,6 @@ public class SseEventBusTest {
 		this.eventBus.subscribeOnly("1", "two");
 		assertThat(this.eventBus.getAllEvents()).containsOnly("two");
 		assertThat(this.eventBus.getSubscribers("two")).containsExactly("1", "2");
-	}
-
-	private Map<String, Client> internalClients() {
-		return (Map<String, Client>) ReflectionTestUtils.getField(this.eventBus,
-				"clients");
 	}
 
 	private static void sleep(long value, TimeUnit timeUnit) {

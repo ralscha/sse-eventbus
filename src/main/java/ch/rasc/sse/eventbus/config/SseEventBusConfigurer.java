@@ -16,11 +16,9 @@
 package ch.rasc.sse.eventbus.config;
 
 import java.time.Duration;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 
+import ch.rasc.sse.eventbus.Client;
 import ch.rasc.sse.eventbus.ClientEvent;
 import ch.rasc.sse.eventbus.SseEventBusListener;
 
@@ -87,6 +85,8 @@ public interface SseEventBusConfigurer {
 	default BlockingQueue<ClientEvent> sendQueue() {
 		return new LinkedBlockingQueue<>();
 	}
+
+	default ConcurrentMap<String, Client> clients() {return new ConcurrentHashMap<>();}
 
 	default SseEventBusListener listener() {
 		return new SseEventBusListener() {

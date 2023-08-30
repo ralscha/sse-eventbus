@@ -15,27 +15,19 @@
  */
 package ch.rasc.sse.eventbus;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import jakarta.annotation.PreDestroy;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
-import jakarta.annotation.PreDestroy;
+import java.time.Duration;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class SseEventBus {
 
@@ -69,7 +61,7 @@ public class SseEventBus {
 		this.noOfSendResponseTries = configurer.noOfSendResponseTries();
 		this.clientExpiration = configurer.clientExpiration();
 
-		this.clients = new ConcurrentHashMap<>();
+		this.clients = configurer.clients();
 
 		this.errorQueue = configurer.errorQueue();
 		this.sendQueue = configurer.sendQueue();
@@ -191,9 +183,7 @@ public class SseEventBus {
 		Set<String> keepEventsSet = null;
 		if (keepEvents != null && keepEvents.length > 0) {
 			keepEventsSet = new HashSet<>();
-			for (String keepEvent : keepEvents) {
-				keepEventsSet.add(keepEvent);
-			}
+			Collections.addAll(keepEventsSet, keepEvents);
 		}
 
 		Set<String> events = this.subscriptionRegistry.getAllEvents();
