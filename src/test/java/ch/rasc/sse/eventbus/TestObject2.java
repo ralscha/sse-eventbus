@@ -22,7 +22,6 @@ public class TestObject2 {
 	private String customer;
 
 	public TestObject2(long id, String customer) {
-		super();
 		this.id = id;
 		this.customer = customer;
 	}

@@ -15,9 +15,9 @@
  */
 package ch.rasc.sse.eventbus;
 
-import com.launchdarkly.eventsource.EventHandler;
+import com.launchdarkly.eventsource.background.BackgroundEventHandler;
 
-public interface DefaultEventHandler extends EventHandler {
+public interface DefaultEventHandler extends BackgroundEventHandler {
 
 	@Override
 	default void onOpen() throws Exception {

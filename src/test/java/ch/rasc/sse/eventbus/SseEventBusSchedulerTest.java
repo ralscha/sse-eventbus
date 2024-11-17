@@ -15,8 +15,15 @@
  */
 package ch.rasc.sse.eventbus;
 
-import ch.rasc.sse.eventbus.config.EnableSseEventBus;
-import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,14 +33,8 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
-import static ch.rasc.sse.eventbus.TestUtils.sleep;
-import static org.assertj.core.api.Assertions.assertThat;
+import ch.rasc.sse.eventbus.config.EnableSseEventBus;
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 
 @ContextConfiguration
 @DirtiesContext

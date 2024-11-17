@@ -49,7 +49,7 @@ public class ClientEvent {
 
 		SseEventBuilder sseBuilder = SseEmitter.event();
 
-		if (!this.event.event().equals(SseEvent.DEFAULT_EVENT)) {
+		if (!SseEvent.DEFAULT_EVENT.equals(this.event.event())) {
 			sseBuilder.name(this.event.event());
 		}
 

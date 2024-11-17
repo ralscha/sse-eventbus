@@ -36,12 +36,14 @@ public class TestController {
 	}
 
 	@GetMapping("/register/{id}/{event}")
-	public SseEmitter eventbus(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public SseEmitter eventbus(@PathVariable("id") String id,
+			@PathVariable("event") String event) {
 		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
 	}
 
 	@GetMapping("/registerOnly/{id}/{event}")
-	public SseEmitter eventbusOnly(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public SseEmitter eventbusOnly(@PathVariable("id") String id,
+			@PathVariable("event") String event) {
 		return this.eventBus.createSseEmitter(id, 3_000L, true, event.split(","));
 	}
 
@@ -53,7 +55,8 @@ public class TestController {
 
 	@ResponseBody
 	@GetMapping("/subscribe/{id}/{event}")
-	public void subscribe(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public void subscribe(@PathVariable("id") String id,
+			@PathVariable("event") String event) {
 		String[] splittedEvents = event.split(",");
 		for (String e : splittedEvents) {
 			this.eventBus.subscribe(id, e);
@@ -62,7 +65,8 @@ public class TestController {
 
 	@ResponseBody
 	@GetMapping("/unsubscribe/{id}/{event}")
-	public void unsubscribe(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public void unsubscribe(@PathVariable("id") String id,
+			@PathVariable("event") String event) {
 		String[] splittedEvents = event.split(",");
 		for (String e : splittedEvents) {
 			this.eventBus.unsubscribe(id, e);
