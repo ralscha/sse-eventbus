@@ -23,10 +23,17 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * Default implementation of {@link SubscriptionRegistry}. This implementation is
+ * thread-safe.
+ */
 public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	private final ConcurrentMap<String, Set<String>> eventSubscribers;
 
+	/**
+	 * Creates a new instance of the DefaultSubscriptionRegistry.
+	 */
 	public DefaultSubscriptionRegistry() {
 		this.eventSubscribers = new ConcurrentHashMap<>();
 	}
@@ -35,29 +42,17 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 		return this.eventSubscribers;
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#subscribe(java.lang.String,
-	 * java.lang.String)
-	 */
 	@Override
 	public void subscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#unsubscribe(java.lang.String,
-	 * java.lang.String)
-	 */
 	@Override
 	public void unsubscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfPresent(event,
 				(k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#isClientSubscribedToEvent(java.lang.
-	 * String, java.lang.String)
-	 */
 	@Override
 	public boolean isClientSubscribedToEvent(String clientId, String eventName) {
 		Set<String> subscribedClients = this.eventSubscribers.get(eventName);
@@ -67,17 +62,11 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 		return false;
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#getAllEvents()
-	 */
 	@Override
 	public Set<String> getAllEvents() {
 		return Collections.unmodifiableSet(this.eventSubscribers.keySet());
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#getAllSubscriptions()
-	 */
 	@Override
 	public Map<String, Set<String>> getAllSubscriptions() {
 		Map<String, Set<String>> result = new HashMap<>();
@@ -87,9 +76,6 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 		return Collections.unmodifiableMap(result);
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#getSubscribers(java.lang.String)
-	 */
 	@Override
 	public Set<String> getSubscribers(String event) {
 		Set<String> clientIds = this.eventSubscribers.get(event);
@@ -99,9 +85,6 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 		return Collections.emptySet();
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#countSubscribers(java.lang.String)
-	 */
 	@Override
 	public int countSubscribers(String event) {
 		Set<String> clientIds = this.eventSubscribers.get(event);
@@ -111,9 +94,6 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 		return 0;
 	}
 
-	/*
-	 * @see ch.rasc.sse.eventbus.SubscriptionRegistry#hasSubscribers(java.lang.String)
-	 */
 	@Override
 	public boolean hasSubscribers(String event) {
 		return countSubscribers(event) != 0;

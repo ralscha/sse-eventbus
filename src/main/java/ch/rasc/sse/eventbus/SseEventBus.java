@@ -35,10 +35,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 import jakarta.annotation.PreDestroy;
 
+/**
+ * The central class for managing Server-Sent Events (SSE).
+ * <p>
+ * This class manages clients, subscriptions, and the broadcasting of events. It is
+ * thread-safe.
+ */
 public class SseEventBus {
 
 	/**
-	 * Client Id -> SseEmitter
+	 * A map that holds all connected clients. The key is the client ID, and the value is
+	 * the {@link Client} object.
 	 */
 	private final ConcurrentMap<String, Client> clients;
 
@@ -58,6 +65,11 @@ public class SseEventBus {
 
 	private final SseEventBusListener listener;
 
+	/**
+	 * Creates a new instance of the SseEventBus.
+	 * @param configurer The configurer to use for this instance.
+	 * @param subscriptionRegistry The subscription registry to use for this instance.
+	 */
 	public SseEventBus(SseEventBusConfigurer configurer,
 			SubscriptionRegistry subscriptionRegistry) {
 
@@ -91,23 +103,65 @@ public class SseEventBus {
 		}
 	}
 
+	/**
+	 * Creates a new {@link SseEmitter} with a default timeout of 180_000 milliseconds
+	 * (3 minutes) and registers the client.
+	 * @param clientId unique client identifier
+	 * @return a new SseEmitter instance
+	 */
 	public SseEmitter createSseEmitter(String clientId) {
 		return createSseEmitter(clientId, 180_000L);
 	}
 
+	/**
+	 * Creates a new {@link SseEmitter} with a default timeout of 180_000 milliseconds
+	 * (3 minutes), registers the client and subscribes the client to the provided
+	 * events.
+	 * @param clientId unique client identifier
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
 	public SseEmitter createSseEmitter(String clientId, String... events) {
 		return createSseEmitter(clientId, 180_000L, false, false, events);
 	}
 
+	/**
+	 * Creates a new {@link SseEmitter} with a default timeout of 180_000 milliseconds
+	 * (3 minutes), registers the client and subscribes the client to the provided
+	 * events.
+	 * @param clientId unique client identifier
+	 * @param unsubscribe if true unsubscribes from all events that are not provided
+	 * with the next parameter
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
 	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe,
 			String... events) {
 		return createSseEmitter(clientId, 180_000L, unsubscribe, false, events);
 	}
 
+	/**
+	 * Creates a new {@link SseEmitter}, registers the client and subscribes the client
+	 * to the provided events.
+	 * @param clientId unique client identifier
+	 * @param timeout timeout value in milliseconds
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
 		return createSseEmitter(clientId, timeout, false, false, events);
 	}
 
+	/**
+	 * Creates a new {@link SseEmitter}, registers the client and subscribes the client
+	 * to the provided events.
+	 * @param clientId unique client identifier
+	 * @param timeout timeout value in milliseconds
+	 * @param unsubscribe if true unsubscribes from all events that are not provided
+	 * with the next parameter
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe,
 			String... events) {
 		return createSseEmitter(clientId, timeout, unsubscribe, false, events);
@@ -119,7 +173,9 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 * @param timeout timeout value in milliseconds
 	 * @param unsubscribe if true unsubscribes from all events that are not provided with
-	 * the next parameter
+	 * the events parameter
+	 * @param completeAfterMessage if true the connection is closed after sending the
+	 * first message
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
@@ -141,10 +197,22 @@ public class SseEventBus {
 		return emitter;
 	}
 
+	/**
+	 * Registers a client.
+	 * @param clientId unique client identifier
+	 * @param emitter the SseEmitter of the client
+	 */
 	public void registerClient(String clientId, SseEmitter emitter) {
 		this.registerClient(clientId, emitter, false);
 	}
 
+	/**
+	 * Registers a client.
+	 * @param clientId unique client identifier
+	 * @param emitter the SseEmitter of the client
+	 * @param completeAfterMessage if true the connection is closed after sending the
+	 * first message
+	 */
 	public void registerClient(String clientId, SseEmitter emitter,
 			boolean completeAfterMessage) {
 		Client client = this.clients.get(clientId);
@@ -157,38 +225,57 @@ public class SseEventBus {
 		}
 	}
 
+	/**
+	 * Unregisters a client and unsubscribes the client from all events.
+	 * @param clientId unique client identifier
+	 */
 	public void unregisterClient(String clientId) {
 		unsubscribeFromAllEvents(clientId);
 		this.clients.remove(clientId);
 	}
 
 	/**
-	 * Subscribe to the default event (message)
+	 * Subscribe to the default event (message).
+	 * @param clientId unique client identifier
 	 */
 	public void subscribe(String clientId) {
 		subscribe(clientId, SseEvent.DEFAULT_EVENT);
 	}
 
+	/**
+	 * Subscribe to a specific event.
+	 * @param clientId unique client identifier
+	 * @param event the event name
+	 */
 	public void subscribe(String clientId, String event) {
 		this.subscriptionRegistry.subscribe(clientId, event);
 	}
 
 	/**
-	 * Subscribe to the event and unsubscribe to all other currently subscribed events
+	 * Subscribe to the event and unsubscribe from all other currently subscribed events.
+	 * @param clientId unique client identifier
+	 * @param event the event name
 	 */
 	public void subscribeOnly(String clientId, String event) {
 		this.subscriptionRegistry.subscribe(clientId, event);
 		this.unsubscribeFromAllEvents(clientId, event);
 	}
 
+	/**
+	 * Unsubscribe from a specific event.
+	 * @param clientId unique client identifier
+	 * @param event the event name
+	 */
 	public void unsubscribe(String clientId, String event) {
 		this.subscriptionRegistry.unsubscribe(clientId, event);
 	}
 
 	/**
 	 * Unsubscribe the client from all events except the events provided with the
-	 * keepEvents parameter. When keepEvents is null the client unsubscribes from all
-	 * events
+	 * keepEvents parameter. When keepEvents is null or empty the client unsubscribes
+	 * from all events.
+	 * @param clientId unique client identifier
+	 * @param keepEvents events the client should stay subscribed to
 	 */
 	public void unsubscribeFromAllEvents(String clientId, String... keepEvents) {
 		Set<String> keepEventsSet = null;
@@ -205,6 +292,10 @@ public class SseEventBus {
 		events.forEach(event -> unsubscribe(clientId, event));
 	}
 
+	/**
+	 * Handles a {@link SseEvent} and sends it to the appropriate clients.
+	 * @param event the event to handle
+	 */
 	@EventListener
 	public void handleEvent(SseEvent event) {
 		try {
@@ -239,7 +330,8 @@ public class SseEventBus {
 			}
 		}
 		catch (InterruptedException e) {
-			throw new RuntimeException(e);
+			LogFactory.getLog(SseEventBus.class).error("handleEvent failed", e);
+			Thread.currentThread().interrupt();
 		}
 	}
 
@@ -263,7 +355,9 @@ public class SseEventBus {
 						}
 					}
 					catch (InterruptedException ie) {
-						throw new RuntimeException(ie);
+						LogFactory.getLog(SseEventBus.class)
+								.error("re-adding event into send queue failed", ie);
+						Thread.currentThread().interrupt();
 					}
 					catch (Exception e) {
 						LogFactory.getLog(SseEventBus.class)
@@ -272,7 +366,9 @@ public class SseEventBus {
 							this.errorQueue.put(sseClientEvent);
 						}
 						catch (InterruptedException ie) {
-							throw new RuntimeException(ie);
+							LogFactory.getLog(SseEventBus.class)
+									.error("re-adding event into error queue failed", ie);
+							Thread.currentThread().interrupt();
 						}
 					}
 				}
@@ -285,7 +381,7 @@ public class SseEventBus {
 	}
 
 	private void eventLoop() {
-		while (true) {
+		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				ClientEvent clientEvent = this.sendQueue.take();
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
@@ -307,7 +403,9 @@ public class SseEventBus {
 							this.errorQueue.put(clientEvent);
 						}
 						catch (InterruptedException ie) {
-							throw new RuntimeException(ie);
+							LogFactory.getLog(SseEventBus.class)
+									.error("adding event into error queue failed", ie);
+							Thread.currentThread().interrupt();
 						}
 						try {
 							this.listener.afterEventSent(clientEvent, e);
@@ -332,7 +430,7 @@ public class SseEventBus {
 				}
 			}
 			catch (InterruptedException ie) {
-				throw new RuntimeException(ie);
+				Thread.currentThread().interrupt();
 			}
 			catch (Exception ex) {
 				LogFactory.getLog(SseEventBus.class).error("eventLoop run failed", ex);
@@ -381,10 +479,18 @@ public class SseEventBus {
 		}
 	}
 
+	/**
+	 * Returns the list of {@link DataObjectConverter}s.
+	 * @return the list of converters
+	 */
 	public List<DataObjectConverter> getDataObjectConverters() {
 		return this.dataObjectConverters;
 	}
 
+	/**
+	 * Sets the list of {@link DataObjectConverter}s.
+	 * @param dataObjectConverters the list of converters
+	 */
 	public void setDataObjectConverters(List<DataObjectConverter> dataObjectConverters) {
 		this.dataObjectConverters = dataObjectConverters;
 	}
@@ -415,6 +521,7 @@ public class SseEventBus {
 
 	/**
 	 * Get all subscribers to a particular event
+	 * @param event the event name
 	 * @return an unmodifiable set of all subscribed clientIds to this event. Empty when
 	 * nobody is subscribed
 	 */
@@ -424,6 +531,7 @@ public class SseEventBus {
 
 	/**
 	 * Get the number of subscribers to a particular event
+	 * @param event the event name
 	 * @return the number of clientIds subscribed to this event. 0 when nobody is
 	 * subscribed
 	 */
@@ -433,6 +541,7 @@ public class SseEventBus {
 
 	/**
 	 * Check if a particular event has subscribers
+	 * @param event the event name
 	 * @return true when the event has 1 or more subscribers.
 	 */
 	public boolean hasSubscribers(String event) {
