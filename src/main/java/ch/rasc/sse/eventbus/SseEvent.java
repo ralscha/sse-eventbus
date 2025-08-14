@@ -27,8 +27,7 @@ import org.immutables.value.Value.Style.ImplementationVisibility;
  * <p>
  * This is an immutable class. Use the {@link #builder()} to create a new instance.
  */
-@Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE,
-		overshadowImplementation = true)
+@Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE, overshadowImplementation = true)
 @Value.Immutable
 public interface SseEvent {
 
@@ -38,8 +37,8 @@ public interface SseEvent {
 	String DEFAULT_EVENT = "message";
 
 	/**
-	 * A set of client IDs to which this event should be sent. If empty, the event is
-	 * sent to all subscribed clients.
+	 * A set of client IDs to which this event should be sent. If empty, the event is sent
+	 * to all subscribed clients.
 	 * @return a set of client IDs
 	 */
 	Set<String> clientIds();
@@ -68,8 +67,8 @@ public interface SseEvent {
 
 	/**
 	 * The data of the event. Can be any object. The
-	 * {@link ch.rasc.sse.eventbus.DataObjectConverter} is responsible for converting
-	 * the object to a String.
+	 * {@link ch.rasc.sse.eventbus.DataObjectConverter} is responsible for converting the
+	 * object to a String.
 	 * @return the event data
 	 */
 	Object data();
@@ -134,7 +133,9 @@ public interface SseEvent {
 	 * The builder for {@link SseEvent}.
 	 */
 	public static final class Builder extends ImmutableSseEvent.Builder {
+
 		// nothing here
+
 	}
 
 }
