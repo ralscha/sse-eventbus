@@ -176,6 +176,9 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.3</version>
+				<configuration>
+					<argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/5.18.0/mockito-core-5.18.0.jar</argLine>
+				</configuration>
 			</plugin>
 
 			<plugin>
@@ -235,26 +238,30 @@
 				<artifactId>license-maven-plugin</artifactId>
 				<version>5.0.0</version>
 				<configuration>
-					<header>${basedir}/src/main/config/header.txt</header>
 					<properties>
 						<year>${project.inceptionYear}</year>
 						<currentYear>2022</currentYear>
 					</properties>
-					<excludes>
-						<exclude>**/*.xml</exclude>
-						<exclude>**/*.md</exclude>
-						<exclude>**/*.py</exclude>
-						<exclude>LICENSE</exclude>
-						<exclude>.travis.yml</exclude>
-						<exclude>**/.gitignore</exclude>
-						<exclude>.factorypath</exclude>
-						<exclude>.mvn/**/*</exclude>
-						<exclude>mvnw.cmd</exclude>
-						<exclude>mvnw</exclude>
-						<exclude>.apt_generated/**</exclude>
-						<exclude>.editorconfig</exclude>
-						<exclude>.github/**</exclude>
-					</excludes>
+					<licenseSets>
+						<licenseSet>
+							<header>${basedir}/src/main/config/header.txt</header>
+							<excludes>
+								<exclude>**/*.xml</exclude>
+								<exclude>**/*.md</exclude>
+								<exclude>**/*.py</exclude>
+								<exclude>LICENSE</exclude>
+								<exclude>.travis.yml</exclude>
+								<exclude>**/.gitignore</exclude>
+								<exclude>.factorypath</exclude>
+								<exclude>.mvn/**/*</exclude>
+								<exclude>mvnw.cmd</exclude>
+								<exclude>mvnw</exclude>
+								<exclude>.apt_generated/**</exclude>
+								<exclude>.editorconfig</exclude>
+								<exclude>.github/**</exclude>
+							</excludes>
+						</licenseSet>
+					</licenseSets>
 					<strictCheck>true</strictCheck>
 				</configuration>
 				<executions>
