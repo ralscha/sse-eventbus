@@ -138,16 +138,14 @@ public class SseEventBusTest {
 		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 		assertThat(CLIENTS_MAP.get("3").sseEmitter()).isEqualTo(se3);
 
-		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2",
-				"three");
+		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2", "three");
 		assertThat(this.eventBus.getSubscribers("one")).containsExactly("1", "3");
 		assertThat(this.eventBus.getSubscribers("two")).containsExactly("2");
 		assertThat(this.eventBus.getSubscribers("two2")).containsExactly("2");
 		assertThat(this.eventBus.getSubscribers("three")).containsExactly("3");
 
 		this.eventBus.unsubscribe("1", "x");
-		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2",
-				"three");
+		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2", "three");
 		assertThat(this.eventBus.getSubscribers("one")).containsExactly("1", "3");
 		assertThat(this.eventBus.getSubscribers("two")).containsExactly("2");
 		assertThat(this.eventBus.getSubscribers("two2")).containsExactly("2");
@@ -174,8 +172,7 @@ public class SseEventBusTest {
 		this.eventBus.createSseEmitter("1", "one");
 		this.eventBus.createSseEmitter("2", "two", "two2");
 		this.eventBus.createSseEmitter("3", "one", "three");
-		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2",
-				"three");
+		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2", "three");
 		sleep(11, TimeUnit.SECONDS);
 		assertThat(this.eventBus.getAllClientIds()).isEmpty();
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
@@ -219,8 +216,7 @@ public class SseEventBusTest {
 		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
 		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
 
-		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "three", "four",
-				"five");
+		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "three", "four", "five");
 		assertThat(this.eventBus.getSubscribers("one")).containsExactly("1");
 		assertThat(this.eventBus.getSubscribers("three")).containsExactly("2");
 		assertThat(this.eventBus.getSubscribers("four")).containsExactly("2");

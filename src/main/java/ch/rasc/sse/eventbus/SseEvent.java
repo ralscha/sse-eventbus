@@ -22,8 +22,7 @@ import java.util.Set;
 import org.immutables.value.Value;
 import org.immutables.value.Value.Style.ImplementationVisibility;
 
-@Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE,
-		overshadowImplementation = true)
+@Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE, overshadowImplementation = true)
 @Value.Immutable
 public interface SseEvent {
 

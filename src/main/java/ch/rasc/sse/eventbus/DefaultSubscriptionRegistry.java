@@ -50,8 +50,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	 */
 	@Override
 	public void unsubscribe(String clientId, String event) {
-		this.eventSubscribers.computeIfPresent(event,
-				(k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
+		this.eventSubscribers.computeIfPresent(event, (k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
 	}
 
 	/*
