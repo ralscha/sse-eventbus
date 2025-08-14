@@ -129,27 +129,6 @@
 
 	</dependencies>
 
-	<profiles>
-		<profile>
-			<id>java24-mockito-agent</id>
-			<activation>
-				<jdk>24</jdk>
-			</activation>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<version>3.5.3</version>
-						<configuration>
-							<argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/5.18.0/mockito-core-5.18.0.jar</argLine>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
-
 	<build>
 		<plugins>
 
