@@ -121,6 +121,9 @@ https://github.com/ralscha/sse-eventbus-demo
 Ionic Demo Chat application:    
 https://github.com/ralscha/sse-eventbus-demo-chat
 
+Kotlin with CoroutineScope example:    
+[KOTLIN_COROUTINES_EXAMPLE.md](KOTLIN_COROUTINES_EXAMPLE.md)
+
 
 ## More information
 Articles about Server-Sent Events    
