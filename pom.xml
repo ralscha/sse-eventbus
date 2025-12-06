@@ -10,7 +10,7 @@
 
 	<groupId>ch.rasc</groupId>
 	<artifactId>sse-eventbus</artifactId>
-	<version>3.0.0</version>
+	<version>3.0.1-SNAPSHOT</version>
 
 	<inceptionYear>2016</inceptionYear>
 
