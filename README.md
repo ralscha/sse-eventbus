@@ -145,6 +145,9 @@ Fortunately it is possible to polyfill the SSE support where it's missing.
 
 ## Changelog
 
+### 3.0.0 - December 6, 2025
+  * Upgrade to Spring 7, Jackson 3
+
 ### 2.0.0 - December 6, 2022
   * Upgrade to Spring 6 (javax. -> jakarta.)
 
