@@ -125,17 +125,8 @@ public interface SseEvent {
 	 * Creates a new builder for this class.
 	 * @return a new builder
 	 */
-	static Builder builder() {
-		return new Builder();
-	}
-
-	/**
-	 * The builder for {@link SseEvent}.
-	 */
-	public static final class Builder extends ImmutableSseEvent.Builder {
-
-		// nothing here
-
+	static ImmutableSseEvent.Builder builder() {
+		return ImmutableSseEvent.builder();
 	}
 
 }

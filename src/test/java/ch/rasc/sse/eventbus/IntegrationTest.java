@@ -65,9 +65,10 @@ public class IntegrationTest {
 	}
 
 	@Test
-	public void testOneClientOneEvent() throws IOException {
+	public void testOneClientOneEvent() throws IOException, InterruptedException {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
+		TimeUnit.SECONDS.sleep(2);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload"));
 		sseResponse.eventSource().close();
 	}
@@ -517,7 +518,7 @@ public class IntegrationTest {
 
 		this.eventPublisher.publishEvent(SseEvent.of("jsonView1", to3));
 		assertSseResponse(sseResponse, new ResponseData("jsonView1",
-				"{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}"));
+				"{\"privateData\":23,\"publicInfo\":\"this is public\",\"uuid\":\"abc\"}"));
 
 		sseResponse.eventSource().close();
 	}
@@ -534,7 +535,7 @@ public class IntegrationTest {
 			.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PUBLIC.class).build());
 
 		assertSseResponse(sseResponse,
-				new ResponseData("jsonView1", "{\"uuid\":\"abc\",\"publicInfo\":\"this is public\"}"));
+				new ResponseData("jsonView1", "{\"publicInfo\":\"this is public\",\"uuid\":\"abc\"}"));
 
 		sseResponse.eventSource().close();
 	}
@@ -550,7 +551,7 @@ public class IntegrationTest {
 		this.eventPublisher
 			.publishEvent(SseEvent.builder().event("jsonView1").data(to3).jsonView(JsonViews.PRIVATE.class).build());
 		assertSseResponse(sseResponse, new ResponseData("jsonView1",
-				"{\"uuid\":\"abc\",\"publicInfo\":\"this is public\",\"privateData\":23}"));
+				"{\"privateData\":23,\"publicInfo\":\"this is public\",\"uuid\":\"abc\"}"));
 
 		sseResponse.eventSource().close();
 	}

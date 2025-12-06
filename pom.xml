@@ -10,7 +10,7 @@
 
 	<groupId>ch.rasc</groupId>
 	<artifactId>sse-eventbus</artifactId>
-	<version>2.0.2-SNAPSHOT</version>
+	<version>3.0.0-SNAPSHOT</version>
 
 	<inceptionYear>2016</inceptionYear>
 
@@ -53,7 +53,7 @@
 			<dependency>
 				<groupId>org.springframework</groupId>
 				<artifactId>spring-framework-bom</artifactId>
-				<version>6.2.10</version>
+				<version>7.0.1</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -74,16 +74,16 @@
 		</dependency>
 
 		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
+			<groupId>tools.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
-			<version>2.20.1</version>
+			<version>3.0.3</version>
 			<optional>true</optional>
 		</dependency>
 
 		<dependency>
 			<groupId>org.immutables</groupId>
 			<artifactId>value</artifactId>
-			<version>2.11.3</version>
+			<version>2.11.7</version>
 			<scope>provided</scope>
 		</dependency>
 
@@ -91,32 +91,14 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<version>3.5.7</version>
+			<version>4.0.0</version>
 			<scope>test</scope>
-			<exclusions>
-				<exclusion>
-					<groupId>ch.qos.logback</groupId>
-					<artifactId>logback-classic</artifactId>
-				</exclusion>
-			</exclusions>
 		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-			<version>3.5.7</version>
-			<scope>test</scope>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-starter-tomcat</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-undertow</artifactId>
-			<version>3.5.7</version>
+			<version>4.0.0</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -124,7 +106,7 @@
 			<groupId>com.launchdarkly</groupId>
 			<artifactId>okhttp-eventsource</artifactId>
 			<version>4.1.1</version>
-			<scope>test</scope>			
+			<scope>test</scope>
 		</dependency>
 
 	</dependencies>
@@ -147,20 +129,20 @@
 					<target>17</target>
 					<release>17</release>
 					<parameters>true</parameters>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.immutables</groupId>
-							<artifactId>value</artifactId>
-							<version>2.11.3</version>
-						</path>
-					</annotationProcessorPaths>
+				<annotationProcessorPaths>
+					<path>
+						<groupId>org.immutables</groupId>
+						<artifactId>value</artifactId>
+						<version>2.11.7</version>
+					</path>
+				</annotationProcessorPaths>
 				</configuration>
 			</plugin>
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-source-plugin</artifactId>
-				<version>3.3.1</version>
+				<version>3.4.0</version>
 				<executions>
 					<execution>
 						<id>attach-sources</id>
@@ -205,13 +187,13 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-resources-plugin</artifactId>
-				<version>3.3.1</version>
+				<version>3.4.0</version>
 			</plugin>
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
-				<version>3.4.2</version>
+				<version>3.5.0</version>
 				<configuration>
 					<archive>
 						<manifestEntries>
@@ -224,7 +206,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-javadoc-plugin</artifactId>
-				<version>3.11.3</version>
+				<version>3.12.0</version>
 				<configuration>
 					<additionalOptions>-Xdoclint:none</additionalOptions>
 				</configuration>
@@ -274,7 +256,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-enforcer-plugin</artifactId>
-				<version>3.6.1</version>
+				<version>3.6.2</version>
 				<executions>
 					<execution>
 						<id>enforce-maven</id>
