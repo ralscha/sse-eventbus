@@ -21,9 +21,9 @@ public class Client {
 
 	private final String id;
 
-	private SseEmitter sseEmitter;
+	private volatile SseEmitter sseEmitter;
 
-	private long lastTransfer;
+	private volatile long lastTransfer;
 
 	private final boolean completeAfterMessage;
 

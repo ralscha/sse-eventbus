@@ -17,7 +17,6 @@ package ch.rasc.sse.eventbus;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +43,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public void subscribe(String clientId, String event) {
-		this.eventSubscribers.computeIfAbsent(event, k -> new HashSet<>()).add(clientId);
+		this.eventSubscribers.computeIfAbsent(event, k -> ConcurrentHashMap.newKeySet()).add(clientId);
 	}
 
 	@Override
@@ -70,7 +69,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	public Map<String, Set<String>> getAllSubscriptions() {
 		Map<String, Set<String>> result = new HashMap<>();
 		this.eventSubscribers.forEach((k, v) -> {
-			result.put(k, Collections.unmodifiableSet(v));
+			result.put(k, Set.copyOf(v));
 		});
 		return Collections.unmodifiableMap(result);
 	}
@@ -79,7 +78,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	public Set<String> getSubscribers(String event) {
 		Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
-			return Collections.unmodifiableSet(clientIds);
+			return Set.copyOf(clientIds);
 		}
 		return Collections.emptySet();
 	}

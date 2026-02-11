@@ -28,11 +28,13 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
 /**
@@ -42,6 +44,8 @@ import jakarta.annotation.PreDestroy;
  * thread-safe.
  */
 public class SseEventBus {
+
+	private static final Log logger = LogFactory.getLog(SseEventBus.class);
 
 	/**
 	 * A map that holds all connected clients. The key is the client ID, and the value is
@@ -57,13 +61,17 @@ public class SseEventBus {
 
 	private final Duration clientExpiration;
 
-	private List<DataObjectConverter> dataObjectConverters;
+	private volatile List<DataObjectConverter> dataObjectConverters;
 
 	private final BlockingQueue<ClientEvent> errorQueue;
 
 	private final BlockingQueue<ClientEvent> sendQueue;
 
 	private final SseEventBusListener listener;
+
+	private final Duration schedulerDelay;
+
+	private final Duration clientExpirationJobDelay;
 
 	/**
 	 * Creates a new instance of the SseEventBus.
@@ -85,19 +93,38 @@ public class SseEventBus {
 		this.listener = configurer.listener();
 
 		this.taskScheduler = configurer.taskScheduler();
+		this.schedulerDelay = configurer.schedulerDelay();
+		this.clientExpirationJobDelay = configurer.clientExpirationJobDelay();
+	}
+
+	/**
+	 * Starts the internal event loop and scheduled tasks. Called after the bean is fully
+	 * initialized (including data object converters) to avoid race conditions.
+	 */
+	@PostConstruct
+	public void init() {
 		if (this.taskScheduler != null) {
 			this.taskScheduler.submit(this::eventLoop);
 			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
-					configurer.schedulerDelay().toMillis(), TimeUnit.MILLISECONDS);
+					this.schedulerDelay.toMillis(), TimeUnit.MILLISECONDS);
 			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0,
-					configurer.clientExpirationJobDelay().toMillis(), TimeUnit.MILLISECONDS);
+					this.clientExpirationJobDelay.toMillis(), TimeUnit.MILLISECONDS);
 		}
 	}
 
 	@PreDestroy
 	public void cleanUp() {
 		if (this.taskScheduler != null) {
-			this.taskScheduler.shutdownNow();
+			this.taskScheduler.shutdown();
+			try {
+				if (!this.taskScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+					this.taskScheduler.shutdownNow();
+				}
+			}
+			catch (InterruptedException e) {
+				this.taskScheduler.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
 		}
 	}
 
@@ -208,13 +235,13 @@ public class SseEventBus {
 	 * first message
 	 */
 	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage) {
-		Client client = this.clients.get(clientId);
-		if (client == null) {
-			this.clients.put(clientId, new Client(clientId, emitter, completeAfterMessage));
-		}
-		else {
-			client.updateEmitter(emitter);
-		}
+		this.clients.compute(clientId, (id, existing) -> {
+			if (existing == null) {
+				return new Client(id, emitter, completeAfterMessage);
+			}
+			existing.updateEmitter(emitter);
+			return existing;
+		});
 	}
 
 	/**
@@ -223,7 +250,15 @@ public class SseEventBus {
 	 */
 	public void unregisterClient(String clientId) {
 		unsubscribeFromAllEvents(clientId);
-		this.clients.remove(clientId);
+		Client removed = this.clients.remove(clientId);
+		if (removed != null) {
+			try {
+				removed.sseEmitter().complete();
+			}
+			catch (Exception e) {
+				logger.debug("Error completing emitter for client " + clientId, e);
+			}
+		}
 	}
 
 	/**
@@ -309,8 +344,10 @@ public class SseEventBus {
 			}
 			else {
 				for (String clientId : event.clientIds()) {
-					if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
-						ClientEvent clientEvent = new ClientEvent(this.clients.get(clientId), event, convertedValue);
+					Client client = this.clients.get(clientId);
+					if (client != null
+								&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
+						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
 					}
@@ -318,7 +355,7 @@ public class SseEventBus {
 			}
 		}
 		catch (InterruptedException e) {
-			LogFactory.getLog(SseEventBus.class).error("handleEvent failed", e);
+			logger.error("handleEvent failed", e);
 			Thread.currentThread().interrupt();
 		}
 	}
@@ -337,20 +374,20 @@ public class SseEventBus {
 							this.listener.afterEventQueued(sseClientEvent, false);
 						}
 						catch (Exception e) {
-							LogFactory.getLog(SseEventBus.class).error("calling afterEventQueued hook failed", e);
+							logger.error("calling afterEventQueued hook failed", e);
 						}
 					}
 					catch (InterruptedException ie) {
-						LogFactory.getLog(SseEventBus.class).error("re-adding event into send queue failed", ie);
+						logger.error("re-adding event into send queue failed", ie);
 						Thread.currentThread().interrupt();
 					}
 					catch (Exception e) {
-						LogFactory.getLog(SseEventBus.class).error("re-adding event into send queue failed", e);
+						logger.error("re-adding event into send queue failed", e);
 						try {
 							this.errorQueue.put(sseClientEvent);
 						}
 						catch (InterruptedException ie) {
-							LogFactory.getLog(SseEventBus.class).error("re-adding event into error queue failed", ie);
+							logger.error("re-adding event into error queue failed", ie);
 							Thread.currentThread().interrupt();
 						}
 					}
@@ -358,7 +395,7 @@ public class SseEventBus {
 			}
 		}
 		catch (Exception e) {
-			LogFactory.getLog(SseEventBus.class).error("reScheduleFailedEvents failed", e);
+			logger.error("reScheduleFailedEvents failed", e);
 		}
 	}
 
@@ -375,7 +412,7 @@ public class SseEventBus {
 							this.listener.afterEventSent(clientEvent, null);
 						}
 						catch (Exception ex) {
-							LogFactory.getLog(SseEventBus.class).error("calling afterEventSent hook failed", ex);
+							logger.error("calling afterEventSent hook failed", ex);
 						}
 					}
 					else {
@@ -384,14 +421,14 @@ public class SseEventBus {
 							this.errorQueue.put(clientEvent);
 						}
 						catch (InterruptedException ie) {
-							LogFactory.getLog(SseEventBus.class).error("adding event into error queue failed", ie);
+							logger.error("adding event into error queue failed", ie);
 							Thread.currentThread().interrupt();
 						}
 						try {
 							this.listener.afterEventSent(clientEvent, e);
 						}
 						catch (Exception ex) {
-							LogFactory.getLog(SseEventBus.class).error("calling afterEventSent hook failed", ex);
+							logger.error("calling afterEventSent hook failed", ex);
 						}
 					}
 				}
@@ -402,7 +439,7 @@ public class SseEventBus {
 						this.listener.afterClientsUnregistered(Collections.singleton(clientId));
 					}
 					catch (Exception ex) {
-						LogFactory.getLog(SseEventBus.class).error("calling afterClientsUnregistered hook failed", ex);
+						logger.error("calling afterClientsUnregistered hook failed", ex);
 					}
 				}
 			}
@@ -410,7 +447,7 @@ public class SseEventBus {
 				Thread.currentThread().interrupt();
 			}
 			catch (Exception ex) {
-				LogFactory.getLog(SseEventBus.class).error("eventLoop run failed", ex);
+				logger.error("eventLoop run failed", ex);
 			}
 		}
 	}
@@ -451,7 +488,9 @@ public class SseEventBus {
 				}
 			}
 			staleClients.forEach(this::unregisterClient);
-			this.listener.afterClientsUnregistered(staleClients);
+			if (!staleClients.isEmpty()) {
+				this.listener.afterClientsUnregistered(staleClients);
+			}
 		}
 	}
 
