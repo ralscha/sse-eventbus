@@ -560,7 +560,7 @@ public class SseEventBus {
 	 * @return true when the event has 1 or more subscribers.
 	 */
 	public boolean hasSubscribers(String event) {
-		return countSubscribers(event) != 0;
+		return this.subscriptionRegistry.hasSubscribers(event);
 	}
 
 }
