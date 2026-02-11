@@ -328,14 +328,16 @@ public class SseEventBus {
 		try {
 
 			String convertedValue = null;
-			if (!(event.data() instanceof String)) {
-				convertedValue = this.convertObject(event);
-			}
+			boolean converted = event.data() instanceof String;
 
 			if (event.clientIds().isEmpty()) {
 				for (Client client : this.clients.values()) {
 					if (!event.excludeClientIds().contains(client.getId())
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(client.getId(), event.event())) {
+						if (!converted) {
+							convertedValue = this.convertObject(event);
+							converted = true;
+						}
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
@@ -347,6 +349,10 @@ public class SseEventBus {
 					Client client = this.clients.get(clientId);
 					if (client != null
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
+						if (!converted) {
+							convertedValue = this.convertObject(event);
+							converted = true;
+						}
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
