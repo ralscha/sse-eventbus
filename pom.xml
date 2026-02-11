@@ -225,10 +225,6 @@
 				<artifactId>license-maven-plugin</artifactId>
 				<version>5.0.0</version>
 				<configuration>
-					<properties>
-						<year>${project.inceptionYear}</year>
-						<currentYear>2022</currentYear>
-					</properties>
 					<licenseSets>
 						<licenseSet>
 							<header>${basedir}/src/main/config/header.txt</header>
