@@ -77,10 +77,10 @@ public interface SseEventBusConfigurer {
 	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
-	 * {@link Executors#newScheduledThreadPool(2)}
+	 * {@link Executors#newScheduledThreadPool(3)}
 	 */
 	default ScheduledExecutorService taskScheduler() {
-		return Executors.newScheduledThreadPool(2);
+		return Executors.newScheduledThreadPool(3);
 	}
 
 	default BlockingQueue<ClientEvent> errorQueue() {
