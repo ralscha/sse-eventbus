@@ -25,7 +25,7 @@ public class Client {
 
 	private volatile long lastTransfer;
 
-	private final boolean completeAfterMessage;
+	private volatile boolean completeAfterMessage;
 
 	Client(String id, SseEmitter sseEmitter, boolean completeAfterMessage) {
 		this.id = id;
@@ -52,6 +52,10 @@ public class Client {
 
 	void updateEmitter(SseEmitter emitter) {
 		this.sseEmitter = emitter;
+	}
+
+	void updateCompleteAfterMessage(boolean completeAfterMessage) {
+		this.completeAfterMessage = completeAfterMessage;
 	}
 
 	boolean isCompleteAfterMessage() {

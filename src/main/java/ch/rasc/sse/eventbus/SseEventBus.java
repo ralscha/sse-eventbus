@@ -27,6 +27,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -235,13 +236,24 @@ public class SseEventBus {
 	 * first message
 	 */
 	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage) {
+		AtomicReference<SseEmitter> oldEmitter = new AtomicReference<>();
 		this.clients.compute(clientId, (id, existing) -> {
 			if (existing == null) {
 				return new Client(id, emitter, completeAfterMessage);
 			}
+			oldEmitter.set(existing.sseEmitter());
 			existing.updateEmitter(emitter);
+			existing.updateCompleteAfterMessage(completeAfterMessage);
 			return existing;
 		});
+		if (oldEmitter.get() != null) {
+			try {
+				oldEmitter.get().complete();
+			}
+			catch (Exception e) {
+				logger.debug("Error completing old emitter for client " + clientId, e);
+			}
+		}
 	}
 
 	/**
@@ -249,11 +261,15 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 */
 	public void unregisterClient(String clientId) {
-		unsubscribeFromAllEvents(clientId);
-		Client removed = this.clients.remove(clientId);
-		if (removed != null) {
+		AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
+		this.clients.computeIfPresent(clientId, (id, client) -> {
+			removedEmitter.set(client.sseEmitter());
+			unsubscribeFromAllEvents(id);
+			return null;
+		});
+		if (removedEmitter.get() != null) {
 			try {
-				removed.sseEmitter().complete();
+				removedEmitter.get().complete();
 			}
 			catch (Exception e) {
 				logger.debug("Error completing emitter for client " + clientId, e);
@@ -284,8 +300,8 @@ public class SseEventBus {
 	 * @param event the event name
 	 */
 	public void subscribeOnly(String clientId, String event) {
-		this.subscriptionRegistry.subscribe(clientId, event);
 		this.unsubscribeFromAllEvents(clientId, event);
+		this.subscriptionRegistry.subscribe(clientId, event);
 	}
 
 	/**
@@ -493,9 +509,30 @@ public class SseEventBus {
 					staleClients.add(entry.getKey());
 				}
 			}
-			staleClients.forEach(this::unregisterClient);
-			if (!staleClients.isEmpty()) {
-				this.listener.afterClientsUnregistered(staleClients);
+			Set<String> actuallyRemoved = new HashSet<>();
+			for (String clientId : staleClients) {
+				long recheckExpiration = System.currentTimeMillis() - this.clientExpiration.toMillis();
+				AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
+				this.clients.computeIfPresent(clientId, (id, client) -> {
+					if (client.lastTransfer() < recheckExpiration) {
+						removedEmitter.set(client.sseEmitter());
+						unsubscribeFromAllEvents(id);
+						return null;
+					}
+					return client;
+				});
+				if (removedEmitter.get() != null) {
+					actuallyRemoved.add(clientId);
+					try {
+						removedEmitter.get().complete();
+					}
+					catch (Exception e) {
+						logger.debug("Error completing emitter for client " + clientId, e);
+					}
+				}
+			}
+			if (!actuallyRemoved.isEmpty()) {
+				this.listener.afterClientsUnregistered(actuallyRemoved);
 			}
 		}
 	}

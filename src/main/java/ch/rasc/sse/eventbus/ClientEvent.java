@@ -16,6 +16,7 @@
 package ch.rasc.sse.eventbus;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
@@ -28,13 +29,13 @@ public class ClientEvent {
 
 	private final String convertedValue;
 
-	private int errorCounter;
+	private final AtomicInteger errorCounter;
 
 	public ClientEvent(Client client, SseEvent event, String convertedValue) {
 		this.client = client;
 		this.event = event;
 		this.convertedValue = convertedValue;
-		this.errorCounter = 0;
+		this.errorCounter = new AtomicInteger(0);
 	}
 
 	public Client getClient() {
@@ -78,11 +79,11 @@ public class ClientEvent {
 	}
 
 	void incErrorCounter() {
-		this.errorCounter++;
+		this.errorCounter.incrementAndGet();
 	}
 
 	public int getErrorCounter() {
-		return this.errorCounter;
+		return this.errorCounter.get();
 	}
 
 }
