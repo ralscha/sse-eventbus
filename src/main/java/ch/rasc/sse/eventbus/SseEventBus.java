@@ -105,10 +105,10 @@ public class SseEventBus {
 	public void init() {
 		if (this.taskScheduler != null) {
 			this.taskScheduler.submit(this::eventLoop);
-			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
-					this.schedulerDelay.toMillis(), TimeUnit.MILLISECONDS);
-			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0,
-					this.clientExpirationJobDelay.toMillis(), TimeUnit.MILLISECONDS);
+			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0, this.schedulerDelay.toMillis(),
+					TimeUnit.MILLISECONDS);
+			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0, this.clientExpirationJobDelay.toMillis(),
+					TimeUnit.MILLISECONDS);
 		}
 	}
 
@@ -346,7 +346,7 @@ public class SseEventBus {
 				for (String clientId : event.clientIds()) {
 					Client client = this.clients.get(clientId);
 					if (client != null
-								&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
+							&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 						this.sendQueue.put(clientEvent);
 						this.listener.afterEventQueued(clientEvent, true);
