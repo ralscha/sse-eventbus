@@ -83,12 +83,24 @@ public interface SseEventBusConfigurer {
 		return Executors.newScheduledThreadPool(3);
 	}
 
+	/**
+	 * Queue for events that failed to send and need to be retried.
+	 * <p>
+	 * Default: bounded {@link LinkedBlockingQueue} with a capacity of 10,000. Producers
+	 * will block when the queue is full, providing backpressure.
+	 */
 	default BlockingQueue<ClientEvent> errorQueue() {
-		return new LinkedBlockingQueue<>();
+		return new LinkedBlockingQueue<>(10_000);
 	}
 
+	/**
+	 * Queue for events waiting to be sent to clients.
+	 * <p>
+	 * Default: bounded {@link LinkedBlockingQueue} with a capacity of 10,000. Producers
+	 * will block when the queue is full, providing backpressure.
+	 */
 	default BlockingQueue<ClientEvent> sendQueue() {
-		return new LinkedBlockingQueue<>();
+		return new LinkedBlockingQueue<>(10_000);
 	}
 
 	default ConcurrentMap<String, Client> clients() {
