@@ -244,6 +244,7 @@ public class SseEventBus {
 			oldEmitter.set(existing.sseEmitter());
 			existing.updateEmitter(emitter);
 			existing.updateCompleteAfterMessage(completeAfterMessage);
+			existing.updateLastTransfer();
 			return existing;
 		});
 		if (oldEmitter.get() != null) {

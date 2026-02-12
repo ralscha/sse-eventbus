@@ -17,6 +17,7 @@ package ch.rasc.sse.eventbus;
 
 import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +55,11 @@ public class SseEventBusTest {
 		@Override
 		public int noOfSendResponseTries() {
 			return 1;
+		}
+
+		@Override
+		public Duration clientExpirationJobDelay() {
+			return Duration.ofSeconds(1);
 		}
 
 		@Override
@@ -119,10 +125,11 @@ public class SseEventBusTest {
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
-		sleep(11, TimeUnit.SECONDS);
-		assertThat(this.eventBus.getAllClientIds()).isEmpty();
-		assertThat(this.eventBus.getAllEvents()).isEmpty();
-		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			assertThat(this.eventBus.getAllClientIds()).isEmpty();
+			assertThat(this.eventBus.getAllEvents()).isEmpty();
+			assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		});
 	}
 
 	@Test
@@ -173,10 +180,11 @@ public class SseEventBusTest {
 		this.eventBus.createSseEmitter("2", "two", "two2");
 		this.eventBus.createSseEmitter("3", "one", "three");
 		assertThat(this.eventBus.getAllEvents()).containsOnly("one", "two", "two2", "three");
-		sleep(11, TimeUnit.SECONDS);
-		assertThat(this.eventBus.getAllClientIds()).isEmpty();
-		assertThat(this.eventBus.getAllEvents()).isEmpty();
-		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			assertThat(this.eventBus.getAllClientIds()).isEmpty();
+			assertThat(this.eventBus.getAllEvents()).isEmpty();
+			assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		});
 	}
 
 	@Test

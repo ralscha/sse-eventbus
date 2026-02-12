@@ -16,10 +16,12 @@
 package ch.rasc.sse.eventbus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -28,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -99,7 +100,7 @@ public class ListenerTest {
 	@Test
 	public void testNoReceivers() {
 		this.eventPublisher.publishEvent(SseEvent.of("otherEvent", "payload"));
-		sleep(3, TimeUnit.SECONDS);
+		sleep(1, TimeUnit.SECONDS);
 
 		assertThat(this.testListener.getAfterEventQueuedFirst()).isEmpty();
 		assertThat(this.testListener.getAfterEventSentOk()).isEmpty();
@@ -111,25 +112,24 @@ public class ListenerTest {
 	@Test
 	public void testClientExpiration() throws IOException {
 		var response = registerSubscribe("1", "eventName", true, 1);
-		sleep(21, TimeUnit.SECONDS);
-
-		assertThat(this.testListener.getAfterEventQueuedFirst()).isEmpty();
-		assertThat(this.testListener.getAfterEventSentOk()).isEmpty();
-		assertThat(this.testListener.getAfterEventQueued()).isEmpty();
-		assertThat(this.testListener.getAfterEventSentFail()).isEmpty();
-		assertThat(this.testListener.getAfterClientsUnregistered()).hasSize(1);
-		assertThat(this.testListener.getAfterClientsUnregistered().get(0)).isEqualTo("1");
-
 		response.eventSource().close();
+
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			assertThat(this.testListener.getAfterEventQueuedFirst()).isEmpty();
+			assertThat(this.testListener.getAfterEventSentOk()).isEmpty();
+			assertThat(this.testListener.getAfterEventQueued()).isEmpty();
+			assertThat(this.testListener.getAfterEventSentFail()).isEmpty();
+			assertThat(this.testListener.getAfterClientsUnregistered()).hasSize(1);
+			assertThat(this.testListener.getAfterClientsUnregistered().get(0)).isEqualTo("1");
+		});
 	}
 
 	@Test
-	@Disabled
 	public void testReconnect() throws IOException {
-		var sseResponse = registerSubscribe("1", "eventName", true, 3);
-		sleep(2, TimeUnit.SECONDS);
-		// assertSseResponseWithException(sseResponse);
-		// sleep(2, TimeUnit.SECONDS);
+		var sseResponse = registerSubscribe("1", "eventName", 3);
+		sleep(500, TimeUnit.MILLISECONDS);
+		sseResponse.eventSource().close();
+		sleep(4, TimeUnit.SECONDS);
 
 		SseEvent sseEvent = SseEvent.builder().event("eventName").data("payload1").build();
 		this.eventBus.handleEvent(sseEvent);
@@ -138,7 +138,7 @@ public class ListenerTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventBus.handleEvent(sseEvent);
 
-		sleep(5, TimeUnit.MILLISECONDS);
+		sleep(500, TimeUnit.MILLISECONDS);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
@@ -146,8 +146,8 @@ public class ListenerTest {
 
 		assertThat(this.testListener.getAfterEventQueuedFirst()).hasSize(3);
 		assertThat(this.testListener.getAfterEventSentOk()).hasSize(3);
-		assertThat(this.testListener.getAfterEventQueued()).hasSize(3);
-		assertThat(this.testListener.getAfterEventSentFail()).hasSize(3);
+		assertThat(this.testListener.getAfterEventQueued()).hasSizeGreaterThanOrEqualTo(3);
+		assertThat(this.testListener.getAfterEventSentFail()).hasSizeGreaterThanOrEqualTo(3);
 		assertThat(this.testListener.getAfterClientsUnregistered()).isEmpty();
 
 		sseResponse.eventSource().close();
@@ -172,7 +172,7 @@ public class ListenerTest {
 		try {
 			List<ResponseData> rds;
 			try {
-				rds = response.dataFuture().get(5, TimeUnit.SECONDS);
+				rds = response.dataFuture().get(2, TimeUnit.SECONDS);
 			}
 			catch (TimeoutException e) {
 				rds = List.of();

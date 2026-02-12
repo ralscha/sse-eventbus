@@ -96,7 +96,7 @@ public class SseEventBusSchedulerTest {
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
-		sleep(11, TimeUnit.SECONDS);
+		sleep(7, TimeUnit.SECONDS);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
 		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
 		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);

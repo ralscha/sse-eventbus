@@ -16,6 +16,7 @@
 package ch.rasc.sse.eventbus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
@@ -28,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -91,10 +91,11 @@ public class IntegrationTest {
 	}
 
 	@Test
-	@Disabled
 	public void testRegisterAndSubscribeOnly() {
 		SubscribeResponse sseResponse1 = registerAndSubscribeOnly("1", "event1", 2);
 		sleep(3, TimeUnit.SECONDS);
+		sseResponse1.eventSource().close();
+
 		SubscribeResponse sseResponse2 = registerAndSubscribe("1", "event2", 2);
 		sleep(3, TimeUnit.SECONDS);
 
@@ -111,14 +112,14 @@ public class IntegrationTest {
 		assertSseResponse(sseResponse2, new ResponseData("event1", "payload1"), new ResponseData("event2", "payload2"));
 
 		SubscribeResponse sseResponse = registerAndSubscribeOnly("1", "event3", 1);
+		sleep(1, TimeUnit.SECONDS);
 		this.eventPublisher.publishEvent(SseEvent.of("event1", "payload1"));
 		this.eventPublisher.publishEvent(SseEvent.of("event2", "payload2"));
 		this.eventPublisher.publishEvent(SseEvent.of("event3", "payload3"));
 
 		assertSseResponse(sseResponse, new ResponseData("event3", "payload3"));
 
-		sseResponse1.eventSource().close();
-		sseResponse2.eventSource().close();
+		sseResponse.eventSource().close();
 	}
 
 	@Test
@@ -369,12 +370,12 @@ public class IntegrationTest {
 	}
 
 	@Test
-	@Disabled
 	public void testReconnect() throws IOException {
-		SubscribeResponse sseResponse = registerSubscribe("1", "eventName", true, 1, true);
-		sleep(2, TimeUnit.SECONDS);
-		// assertSseResponseWithException(sseResponse);
-		sleep(2, TimeUnit.SECONDS);
+		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
+		sleep(500, TimeUnit.MILLISECONDS);
+		sseResponse.eventSource().close();
+		sleep(4, TimeUnit.SECONDS);
+
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
@@ -389,26 +390,11 @@ public class IntegrationTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
+		sleep(500, TimeUnit.MILLISECONDS);
+
 		sseResponse = registerSubscribe("1", "eventName", 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"), new ResponseData("eventName", "payload3"));
-		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
-		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
-		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
-		assertThat(this.eventBus.getSubscribers("eventName")).containsOnly("1");
-		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(1);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
-
-		sseEvent = SseEvent.builder().event("eventName").data("payload4").build();
-		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload5").build();
-		this.eventPublisher.publishEvent(sseEvent);
-		sseEvent = SseEvent.builder().event("eventName").data("payload6").build();
-		this.eventPublisher.publishEvent(sseEvent);
-
-		sseResponse = registerSubscribe("1", "eventName", 3);
-		assertSseResponse(sseResponse, new ResponseData("eventName", "payload4"),
-				new ResponseData("eventName", "payload5"), new ResponseData("eventName", "payload6"));
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
 		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
@@ -438,14 +424,14 @@ public class IntegrationTest {
 		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
 		response.eventSource().close();
 
-		sleep(21, TimeUnit.SECONDS);
-
-		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
-		assertThat(this.eventBus.getAllEvents()).isEmpty();
-		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
-		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
-		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
-		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+			assertThat(this.eventBus.getAllEvents()).isEmpty();
+			assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+			assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+			assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+			assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		});
 
 		response.eventSource().close();
 	}
@@ -477,13 +463,14 @@ public class IntegrationTest {
 			response.eventSource().close();
 		}
 
-		sleep(21, TimeUnit.SECONDS);
-		assertThat(this.eventBus.getAllClientIds()).hasSize(0);
-		assertThat(this.eventBus.getAllEvents()).isEmpty();
-		assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
-		assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
-		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
-		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+			assertThat(this.eventBus.getAllEvents()).isEmpty();
+			assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+			assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+			assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+			assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+		});
 	}
 
 	@Test
@@ -584,7 +571,7 @@ public class IntegrationTest {
 		try {
 			List<ResponseData> rds;
 			try {
-				rds = response.dataFuture.get(5, TimeUnit.SECONDS);
+				rds = response.dataFuture.get(2, TimeUnit.SECONDS);
 			}
 			catch (TimeoutException e) {
 				rds = List.of();

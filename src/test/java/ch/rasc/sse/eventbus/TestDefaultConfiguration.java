@@ -33,7 +33,12 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 
 	@Override
 	public Duration clientExpiration() {
-		return Duration.ofSeconds(10);
+		return Duration.ofSeconds(5);
+	}
+
+	@Override
+	public Duration clientExpirationJobDelay() {
+		return Duration.ofSeconds(1);
 	}
 
 	@Override
