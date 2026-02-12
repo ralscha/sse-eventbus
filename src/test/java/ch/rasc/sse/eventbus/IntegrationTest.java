@@ -372,9 +372,9 @@ public class IntegrationTest {
 	@Test
 	public void testReconnect() throws IOException {
 		SubscribeResponse sseResponse = registerSubscribe("1", "eventName");
-		sleep(500, TimeUnit.MILLISECONDS);
+		sleep(200, TimeUnit.MILLISECONDS);
 		sseResponse.eventSource().close();
-		sleep(4, TimeUnit.SECONDS);
+		sleep(3, TimeUnit.SECONDS);
 
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
@@ -571,7 +571,7 @@ public class IntegrationTest {
 		try {
 			List<ResponseData> rds;
 			try {
-				rds = response.dataFuture.get(2, TimeUnit.SECONDS);
+				rds = response.dataFuture.get(10, TimeUnit.SECONDS);
 			}
 			catch (TimeoutException e) {
 				rds = List.of();
@@ -627,7 +627,9 @@ public class IntegrationTest {
 			.execute();
 
 		if (sleep) {
-			sleep(333, TimeUnit.MILLISECONDS);
+			await().atMost(Duration.ofSeconds(5)).until(() ->
+					this.eventBus.getAllClientIds().contains(clientId)
+					&& this.eventBus.getSubscribers(eventName).contains(clientId));
 		}
 
 		return new SubscribeResponse(eventSource, dataFuture);

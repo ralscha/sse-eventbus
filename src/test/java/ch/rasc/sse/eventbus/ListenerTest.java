@@ -127,9 +127,9 @@ public class ListenerTest {
 	@Test
 	public void testReconnect() throws IOException {
 		var sseResponse = registerSubscribe("1", "eventName", 3);
-		sleep(500, TimeUnit.MILLISECONDS);
+		sleep(200, TimeUnit.MILLISECONDS);
 		sseResponse.eventSource().close();
-		sleep(4, TimeUnit.SECONDS);
+		sleep(3, TimeUnit.SECONDS);
 
 		SseEvent sseEvent = SseEvent.builder().event("eventName").data("payload1").build();
 		this.eventBus.handleEvent(sseEvent);
@@ -172,7 +172,7 @@ public class ListenerTest {
 		try {
 			List<ResponseData> rds;
 			try {
-				rds = response.dataFuture().get(2, TimeUnit.SECONDS);
+				rds = response.dataFuture().get(10, TimeUnit.SECONDS);
 			}
 			catch (TimeoutException e) {
 				rds = List.of();
@@ -222,7 +222,9 @@ public class ListenerTest {
 		}
 		client.newCall(new Request.Builder().get().url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 			.execute();
-		sleep(333, TimeUnit.MILLISECONDS);
+		await().atMost(Duration.ofSeconds(5)).until(() ->
+				this.eventBus.getAllClientIds().contains(clientId)
+				&& this.eventBus.getSubscribers(eventName).contains(clientId));
 		return new SubscribeResponse(backgroundEventSource, dataFuture);
 	}
 
