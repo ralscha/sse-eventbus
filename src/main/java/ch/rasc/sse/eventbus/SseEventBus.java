@@ -76,6 +76,10 @@ public class SseEventBus {
 
 	private final Duration heartbeatInterval;
 
+	private final boolean schedulerEnabled;
+
+	private final int sendWorkerCount;
+
 	/**
 	 * Creates a new instance of the SseEventBus.
 	 * @param configurer The configurer to use for this instance.
@@ -98,6 +102,8 @@ public class SseEventBus {
 		this.listener = configurer.listener();
 
 		this.taskScheduler = configurer.taskScheduler();
+		this.schedulerEnabled = this.taskScheduler != null;
+		this.sendWorkerCount = Math.max(1, configurer.sendWorkerCount());
 		this.schedulerDelay = configurer.schedulerDelay();
 		this.clientExpirationJobDelay = configurer.clientExpirationJobDelay();
 		this.heartbeatInterval = configurer.heartbeatInterval();
@@ -112,8 +118,10 @@ public class SseEventBus {
 	 */
 	@PostConstruct
 	public void init() {
-		if (this.taskScheduler != null) {
-			this.taskScheduler.submit(this::eventLoop);
+		if (this.schedulerEnabled) {
+			for (int worker = 0; worker < this.sendWorkerCount; worker++) {
+				this.taskScheduler.submit(this::eventLoop);
+			}
 			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0, this.schedulerDelay.toMillis(),
 					TimeUnit.MILLISECONDS);
 			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0, this.clientExpirationJobDelay.toMillis(),
@@ -122,13 +130,17 @@ public class SseEventBus {
 				this.taskScheduler.scheduleWithFixedDelay(this::sendHeartbeat, this.heartbeatInterval.toMillis(),
 						this.heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS);
 			}
-			logger.info("SseEventBus started");
+			logger.info("SseEventBus started with " + this.sendWorkerCount + " send worker(s)");
+		}
+		else {
+			logger
+				.warn("SseEventBus started without scheduler; events are sent synchronously and retries are disabled");
 		}
 	}
 
 	@PreDestroy
 	public void cleanUp() {
-		if (this.taskScheduler != null) {
+		if (this.schedulerEnabled) {
 			logger.info("SseEventBus shutting down");
 			this.taskScheduler.shutdownNow();
 			try {
@@ -394,8 +406,7 @@ public class SseEventBus {
 							converted = true;
 						}
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-						this.sendQueue.put(clientEvent);
-						this.listener.afterEventQueued(clientEvent, true);
+						queueOrSend(clientEvent, true);
 					}
 				}
 			}
@@ -409,8 +420,7 @@ public class SseEventBus {
 							converted = true;
 						}
 						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-						this.sendQueue.put(clientEvent);
-						this.listener.afterEventQueued(clientEvent, true);
+						queueOrSend(clientEvent, true);
 					}
 				}
 			}
@@ -418,6 +428,42 @@ public class SseEventBus {
 		catch (InterruptedException e) {
 			logger.error("handleEvent failed", e);
 			Thread.currentThread().interrupt();
+		}
+	}
+
+	private void queueOrSend(ClientEvent clientEvent, boolean firstAttempt) throws InterruptedException {
+		if (this.schedulerEnabled) {
+			this.sendQueue.put(clientEvent);
+			notifyAfterEventQueued(clientEvent, firstAttempt);
+			return;
+		}
+
+		notifyAfterEventQueued(clientEvent, firstAttempt);
+		Exception exception = sendEventToClient(clientEvent);
+		if (exception == null) {
+			clientEvent.getClient().updateLastTransfer();
+		}
+		notifyAfterEventSent(clientEvent, exception);
+		if (exception != null && logger.isDebugEnabled()) {
+			logger.debug("Synchronous send failed for client " + clientEvent.getClient().getId(), exception);
+		}
+	}
+
+	private void notifyAfterEventQueued(ClientEvent clientEvent, boolean firstAttempt) {
+		try {
+			this.listener.afterEventQueued(clientEvent, firstAttempt);
+		}
+		catch (Exception e) {
+			logger.error("calling afterEventQueued hook failed", e);
+		}
+	}
+
+	private void notifyAfterEventSent(ClientEvent clientEvent, Exception exception) {
+		try {
+			this.listener.afterEventSent(clientEvent, exception);
+		}
+		catch (Exception e) {
+			logger.error("calling afterEventSent hook failed", e);
 		}
 	}
 
@@ -449,12 +495,7 @@ public class SseEventBus {
 						sseClientEvent.getSseEvent().event())) {
 					try {
 						this.sendQueue.put(sseClientEvent);
-						try {
-							this.listener.afterEventQueued(sseClientEvent, false);
-						}
-						catch (Exception e) {
-							logger.error("calling afterEventQueued hook failed", e);
-						}
+						notifyAfterEventQueued(sseClientEvent, false);
 					}
 					catch (InterruptedException ie) {
 						logger.error("re-adding event into send queue failed", ie);
@@ -487,12 +528,7 @@ public class SseEventBus {
 					Exception e = sendEventToClient(clientEvent);
 					if (e == null) {
 						client.updateLastTransfer();
-						try {
-							this.listener.afterEventSent(clientEvent, null);
-						}
-						catch (Exception ex) {
-							logger.error("calling afterEventSent hook failed", ex);
-						}
+						notifyAfterEventSent(clientEvent, null);
 					}
 					else {
 						clientEvent.incErrorCounter();
@@ -503,12 +539,7 @@ public class SseEventBus {
 							logger.error("adding event into error queue failed", ie);
 							Thread.currentThread().interrupt();
 						}
-						try {
-							this.listener.afterEventSent(clientEvent, e);
-						}
-						catch (Exception ex) {
-							logger.error("calling afterEventSent hook failed", ex);
-						}
+						notifyAfterEventSent(clientEvent, e);
 					}
 				}
 				else {

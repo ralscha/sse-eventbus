@@ -74,6 +74,18 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
+	 * Number of worker loops consuming from the send queue.
+	 * <p>
+	 * Increase this value to reduce head-of-line blocking when slow clients delay event
+	 * delivery. Keep at 1 when strict global queue ordering is required.
+	 * <p>
+	 * Default: 1
+	 */
+	default int sendWorkerCount() {
+		return 1;
+	}
+
+	/**
 	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
