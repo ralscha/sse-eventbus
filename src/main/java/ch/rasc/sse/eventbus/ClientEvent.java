@@ -31,6 +31,8 @@ public class ClientEvent {
 
 	private final AtomicInteger errorCounter;
 
+	private volatile long retryAfter;
+
 	public ClientEvent(Client client, SseEvent event, String convertedValue) {
 		this.client = client;
 		this.event = event;
@@ -79,11 +81,17 @@ public class ClientEvent {
 	}
 
 	void incErrorCounter() {
-		this.errorCounter.incrementAndGet();
+		int count = this.errorCounter.incrementAndGet();
+		long delayMs = Math.min(500L * (1L << Math.min(count, 10)), 30_000L);
+		this.retryAfter = System.currentTimeMillis() + delayMs;
 	}
 
 	public int getErrorCounter() {
 		return this.errorCounter.get();
+	}
+
+	boolean isReadyForRetry() {
+		return System.currentTimeMillis() >= this.retryAfter;
 	}
 
 }

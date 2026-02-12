@@ -101,4 +101,15 @@ public interface SseEventBusConfigurer {
 		};
 	}
 
+	/**
+	 * Specifies the interval for sending heartbeat (keep-alive) comments to all connected
+	 * clients. SSE connections through proxies and load balancers are often dropped after
+	 * idle periods; heartbeats prevent this.
+	 * <p>
+	 * Default: {@link Duration#ZERO} (disabled)
+	 */
+	default Duration heartbeatInterval() {
+		return Duration.ZERO;
+	}
+
 }

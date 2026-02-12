@@ -16,6 +16,7 @@
 package ch.rasc.sse.eventbus;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -24,15 +25,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class TestListener implements SseEventBusListener {
 
-	private List<ClientEvent> afterEventQueuedFirst = new ArrayList<>();
+	private final List<ClientEvent> afterEventQueuedFirst = Collections.synchronizedList(new ArrayList<>());
 
-	private List<ClientEvent> afterEventQueued = new ArrayList<>();
+	private final List<ClientEvent> afterEventQueued = Collections.synchronizedList(new ArrayList<>());
 
-	private List<ClientEvent> afterEventSentOk = new ArrayList<>();
+	private final List<ClientEvent> afterEventSentOk = Collections.synchronizedList(new ArrayList<>());
 
-	private List<ClientEvent> afterEventSentFail = new ArrayList<>();
+	private final List<ClientEvent> afterEventSentFail = Collections.synchronizedList(new ArrayList<>());
 
-	private List<String> afterClientsUnregistered = new ArrayList<>();
+	private final List<String> afterClientsUnregistered = Collections.synchronizedList(new ArrayList<>());
 
 	@Override
 	public void afterEventQueued(ClientEvent clientEvent, boolean firstAttempt) {
@@ -80,11 +81,11 @@ public class TestListener implements SseEventBusListener {
 	}
 
 	public void reset() {
-		this.afterEventQueuedFirst = new ArrayList<>();
-		this.afterEventQueued = new ArrayList<>();
-		this.afterEventSentOk = new ArrayList<>();
-		this.afterEventSentFail = new ArrayList<>();
-		this.afterClientsUnregistered = new ArrayList<>();
+		this.afterEventQueuedFirst.clear();
+		this.afterEventQueued.clear();
+		this.afterEventSentOk.clear();
+		this.afterEventSentFail.clear();
+		this.afterClientsUnregistered.clear();
 	}
 
 }

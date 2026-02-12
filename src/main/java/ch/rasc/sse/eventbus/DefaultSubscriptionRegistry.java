@@ -30,11 +30,14 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	private final ConcurrentMap<String, Set<String>> eventSubscribers;
 
+	private final ConcurrentMap<String, Set<String>> clientEvents;
+
 	/**
 	 * Creates a new instance of the DefaultSubscriptionRegistry.
 	 */
 	public DefaultSubscriptionRegistry() {
 		this.eventSubscribers = new ConcurrentHashMap<>();
+		this.clientEvents = new ConcurrentHashMap<>();
 	}
 
 	protected ConcurrentMap<String, Set<String>> getEventSubscribers() {
@@ -44,11 +47,13 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	@Override
 	public void subscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfAbsent(event, k -> ConcurrentHashMap.newKeySet()).add(clientId);
+		this.clientEvents.computeIfAbsent(clientId, k -> ConcurrentHashMap.newKeySet()).add(event);
 	}
 
 	@Override
 	public void unsubscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfPresent(event, (k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
+		this.clientEvents.computeIfPresent(clientId, (k, set) -> set.remove(event) && set.isEmpty() ? null : set);
 	}
 
 	@Override
@@ -94,7 +99,18 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public boolean hasSubscribers(String event) {
-		return countSubscribers(event) != 0;
+		return this.eventSubscribers.containsKey(event);
+	}
+
+	@Override
+	public void unsubscribeAll(String clientId) {
+		Set<String> events = this.clientEvents.remove(clientId);
+		if (events != null) {
+			for (String event : events) {
+				this.eventSubscribers.computeIfPresent(event,
+						(k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
+			}
+		}
 	}
 
 }

@@ -58,4 +58,12 @@ public interface SubscriptionRegistry {
 	 */
 	boolean hasSubscribers(String event);
 
+	/**
+	 * Unsubscribe a client from all events.
+	 * @param clientId unique client identifier
+	 */
+	default void unsubscribeAll(String clientId) {
+		getAllEvents().forEach(event -> unsubscribe(clientId, event));
+	}
+
 }

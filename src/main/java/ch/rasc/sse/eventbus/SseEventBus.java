@@ -62,7 +62,7 @@ public class SseEventBus {
 
 	private final Duration clientExpiration;
 
-	private volatile List<DataObjectConverter> dataObjectConverters;
+	private final List<DataObjectConverter> dataObjectConverters;
 
 	private final BlockingQueue<ClientEvent> errorQueue;
 
@@ -74,12 +74,16 @@ public class SseEventBus {
 
 	private final Duration clientExpirationJobDelay;
 
+	private final Duration heartbeatInterval;
+
 	/**
 	 * Creates a new instance of the SseEventBus.
 	 * @param configurer The configurer to use for this instance.
 	 * @param subscriptionRegistry The subscription registry to use for this instance.
+	 * @param dataObjectConverters The list of data object converters.
 	 */
-	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry) {
+	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
+			List<DataObjectConverter> dataObjectConverters) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
@@ -96,6 +100,10 @@ public class SseEventBus {
 		this.taskScheduler = configurer.taskScheduler();
 		this.schedulerDelay = configurer.schedulerDelay();
 		this.clientExpirationJobDelay = configurer.clientExpirationJobDelay();
+		this.heartbeatInterval = configurer.heartbeatInterval();
+
+		this.dataObjectConverters = dataObjectConverters != null
+				? Collections.unmodifiableList(new ArrayList<>(dataObjectConverters)) : List.of();
 	}
 
 	/**
@@ -110,22 +118,38 @@ public class SseEventBus {
 					TimeUnit.MILLISECONDS);
 			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0, this.clientExpirationJobDelay.toMillis(),
 					TimeUnit.MILLISECONDS);
+			if (!this.heartbeatInterval.isZero() && !this.heartbeatInterval.isNegative()) {
+				this.taskScheduler.scheduleWithFixedDelay(this::sendHeartbeat, this.heartbeatInterval.toMillis(),
+						this.heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS);
+			}
+			logger.info("SseEventBus started");
 		}
 	}
 
 	@PreDestroy
 	public void cleanUp() {
 		if (this.taskScheduler != null) {
-			this.taskScheduler.shutdown();
+			logger.info("SseEventBus shutting down");
+			this.taskScheduler.shutdownNow();
 			try {
-				if (!this.taskScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-					this.taskScheduler.shutdownNow();
-				}
+				this.taskScheduler.awaitTermination(5, TimeUnit.SECONDS);
 			}
 			catch (InterruptedException e) {
-				this.taskScheduler.shutdownNow();
 				Thread.currentThread().interrupt();
 			}
+
+			// Flush remaining events after the event loop has stopped
+			List<ClientEvent> remaining = new ArrayList<>();
+			this.sendQueue.drainTo(remaining);
+			for (ClientEvent clientEvent : remaining) {
+				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
+					sendEventToClient(clientEvent);
+				}
+			}
+			if (!remaining.isEmpty()) {
+				logger.info("SseEventBus flushed " + remaining.size() + " pending events on shutdown");
+			}
+			logger.info("SseEventBus shut down");
 		}
 	}
 
@@ -254,6 +278,12 @@ public class SseEventBus {
 			catch (Exception e) {
 				logger.debug("Error completing old emitter for client " + clientId, e);
 			}
+			if (logger.isDebugEnabled()) {
+				logger.debug("Client re-registered: " + clientId);
+			}
+		}
+		else if (logger.isDebugEnabled()) {
+			logger.debug("Client registered: " + clientId);
 		}
 	}
 
@@ -265,7 +295,7 @@ public class SseEventBus {
 		AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
 		this.clients.computeIfPresent(clientId, (id, client) -> {
 			removedEmitter.set(client.sseEmitter());
-			unsubscribeFromAllEvents(id);
+			this.subscriptionRegistry.unsubscribeAll(id);
 			return null;
 		});
 		if (removedEmitter.get() != null) {
@@ -274,6 +304,9 @@ public class SseEventBus {
 			}
 			catch (Exception e) {
 				logger.debug("Error completing emitter for client " + clientId, e);
+			}
+			if (logger.isDebugEnabled()) {
+				logger.debug("Client unregistered: " + clientId);
 			}
 		}
 	}
@@ -348,9 +381,14 @@ public class SseEventBus {
 			boolean converted = event.data() instanceof String;
 
 			if (event.clientIds().isEmpty()) {
-				for (Client client : this.clients.values()) {
-					if (!event.excludeClientIds().contains(client.getId())
-							&& this.subscriptionRegistry.isClientSubscribedToEvent(client.getId(), event.event())) {
+				Set<String> subscribers = this.subscriptionRegistry.getSubscribers(event.event());
+				Set<String> excludes = event.excludeClientIds();
+				for (String subscriberId : subscribers) {
+					if (!excludes.isEmpty() && excludes.contains(subscriberId)) {
+						continue;
+					}
+					Client client = this.clients.get(subscriberId);
+					if (client != null) {
 						if (!converted) {
 							convertedValue = this.convertObject(event);
 							converted = true;
@@ -389,7 +427,25 @@ public class SseEventBus {
 			this.errorQueue.drainTo(failedEvents);
 
 			for (ClientEvent sseClientEvent : failedEvents) {
-				if (this.subscriptionRegistry.isClientSubscribedToEvent(sseClientEvent.getClient().getId(),
+				String clientId = sseClientEvent.getClient().getId();
+
+				// Skip events for clients that are no longer registered
+				if (!this.clients.containsKey(clientId)) {
+					continue;
+				}
+
+				// Respect exponential backoff — not ready yet, put back
+				if (!sseClientEvent.isReadyForRetry()) {
+					try {
+						this.errorQueue.put(sseClientEvent);
+					}
+					catch (InterruptedException ie) {
+						Thread.currentThread().interrupt();
+					}
+					continue;
+				}
+
+				if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
 						sseClientEvent.getSseEvent().event())) {
 					try {
 						this.sendQueue.put(sseClientEvent);
@@ -491,10 +547,14 @@ public class SseEventBus {
 	}
 
 	private String convertObject(SseEvent event) {
-		if (this.dataObjectConverters != null) {
-			for (DataObjectConverter converter : this.dataObjectConverters) {
-				if (converter.supports(event)) {
+		for (DataObjectConverter converter : this.dataObjectConverters) {
+			if (converter.supports(event)) {
+				try {
 					return converter.convert(event);
+				}
+				catch (Exception e) {
+					logger.error("DataObjectConverter failed for event '" + event.event() + "'", e);
+					return null;
 				}
 			}
 		}
@@ -511,13 +571,13 @@ public class SseEventBus {
 				}
 			}
 			Set<String> actuallyRemoved = new HashSet<>();
+			long recheckExpiration = System.currentTimeMillis() - this.clientExpiration.toMillis();
 			for (String clientId : staleClients) {
-				long recheckExpiration = System.currentTimeMillis() - this.clientExpiration.toMillis();
 				AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
 				this.clients.computeIfPresent(clientId, (id, client) -> {
 					if (client.lastTransfer() < recheckExpiration) {
 						removedEmitter.set(client.sseEmitter());
-						unsubscribeFromAllEvents(id);
+						this.subscriptionRegistry.unsubscribeAll(id);
 						return null;
 					}
 					return client;
@@ -547,11 +607,12 @@ public class SseEventBus {
 	}
 
 	/**
-	 * Sets the list of {@link DataObjectConverter}s.
-	 * @param dataObjectConverters the list of converters
+	 * Check if a client is currently registered.
+	 * @param clientId unique client identifier
+	 * @return true if the client is registered
 	 */
-	public void setDataObjectConverters(List<DataObjectConverter> dataObjectConverters) {
-		this.dataObjectConverters = dataObjectConverters;
+	public boolean isClientRegistered(String clientId) {
+		return this.clients.containsKey(clientId);
 	}
 
 	/**
@@ -605,6 +666,42 @@ public class SseEventBus {
 	 */
 	public boolean hasSubscribers(String event) {
 		return this.subscriptionRegistry.hasSubscribers(event);
+	}
+
+	/**
+	 * Get the number of currently connected clients.
+	 * @return the number of registered clients
+	 */
+	public int getClientCount() {
+		return this.clients.size();
+	}
+
+	/**
+	 * Get the current size of the send queue.
+	 * @return number of events waiting to be sent
+	 */
+	public int getSendQueueSize() {
+		return this.sendQueue.size();
+	}
+
+	/**
+	 * Get the current size of the error/retry queue.
+	 * @return number of events waiting to be retried
+	 */
+	public int getErrorQueueSize() {
+		return this.errorQueue.size();
+	}
+
+	private void sendHeartbeat() {
+		for (Client client : this.clients.values()) {
+			try {
+				client.sseEmitter().send(SseEmitter.event().comment("heartbeat"));
+				client.updateLastTransfer();
+			}
+			catch (Exception e) {
+				logger.debug("Heartbeat failed for client " + client.getId(), e);
+			}
+		}
 	}
 
 }

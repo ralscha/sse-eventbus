@@ -68,8 +68,6 @@ public class DefaultSseEventBusConfiguration {
 			registry = new DefaultSubscriptionRegistry();
 		}
 
-		SseEventBus sseEventBus = new SseEventBus(config, registry);
-
 		List<DataObjectConverter> converters = this.dataObjectConverters;
 		if (converters == null) {
 			converters = new ArrayList<>();
@@ -82,7 +80,7 @@ public class DefaultSseEventBusConfiguration {
 			converters.add(new DefaultDataObjectConverter());
 		}
 
-		sseEventBus.setDataObjectConverters(converters);
+		SseEventBus sseEventBus = new SseEventBus(config, registry, converters);
 
 		return sseEventBus;
 	}

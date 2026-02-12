@@ -15,6 +15,7 @@
  */
 package ch.rasc.sse.eventbus;
 
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -67,6 +68,14 @@ public class ListenerTest {
 	public void cleanup() {
 		for (String clientId : this.eventBus.getAllClientIds()) {
 			this.eventBus.unregisterClient(clientId);
+		}
+		if (!this.eventBus.getAllClientIds().isEmpty()) {
+			await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+				for (String clientId : this.eventBus.getAllClientIds()) {
+					this.eventBus.unregisterClient(clientId);
+				}
+				assertThat(this.eventBus.getAllClientIds()).isEmpty();
+			});
 		}
 		this.testListener.reset();
 	}
@@ -213,6 +222,8 @@ public class ListenerTest {
 		BackgroundEventSource backgroundEventSource = new BackgroundEventSource.Builder(handler, builder).build();
 		backgroundEventSource.start();
 
+		sleep(500, TimeUnit.MILLISECONDS);
+
 		OkHttpClient client;
 		if (shortTimeout) {
 			client = createHttpClient(500, TimeUnit.MILLISECONDS);
@@ -222,19 +233,10 @@ public class ListenerTest {
 		}
 		client.newCall(new Request.Builder().get().url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
 			.execute();
-		await().atMost(Duration.ofSeconds(5)).until(() ->
-				this.eventBus.getAllClientIds().contains(clientId)
-				&& this.eventBus.getSubscribers(eventName).contains(clientId));
+		await().atMost(Duration.ofSeconds(5))
+			.until(() -> this.eventBus.getAllClientIds().contains(clientId)
+					&& this.eventBus.getSubscribers(eventName).contains(clientId));
 		return new SubscribeResponse(backgroundEventSource, dataFuture);
-	}
-
-	private static void sleep(long value, TimeUnit timeUnit) {
-		try {
-			timeUnit.sleep(value);
-		}
-		catch (InterruptedException e) {
-			// nothing here
-		}
 	}
 
 }

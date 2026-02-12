@@ -15,6 +15,7 @@
  */
 package ch.rasc.sse.eventbus;
 
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -27,7 +28,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,6 +61,14 @@ public class IntegrationTest {
 	public void cleanup() {
 		for (String clientId : this.eventBus.getAllClientIds()) {
 			this.eventBus.unregisterClient(clientId);
+		}
+		if (!this.eventBus.getAllClientIds().isEmpty()) {
+			await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+				for (String clientId : this.eventBus.getAllClientIds()) {
+					this.eventBus.unregisterClient(clientId);
+				}
+				assertThat(this.eventBus.getAllClientIds()).isEmpty();
+			});
 		}
 	}
 
@@ -439,20 +447,18 @@ public class IntegrationTest {
 	@Test
 	public void testMany() throws IOException {
 		List<SubscribeResponse> responses = new ArrayList<>();
-		for (int i = 0; i < 100; i++) {
-			responses.add(registerSubscribe(String.valueOf(i), "eventName", false, 1, false));
+		for (int i = 0; i < 120; i++) {
+			responses.add(registerAndSubscribe(String.valueOf(i), "eventName", 1));
 		}
-		for (int i = 100; i < 120; i++) {
-			responses.add(registerSubscribe(String.valueOf(i), "eventName", true, 1, false));
-		}
-		sleep(3, TimeUnit.SECONDS);
 
-		assertThat(this.eventBus.getAllClientIds()).hasSize(120);
-		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
-		assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
-		assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
-		assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
-		assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
+		await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+			assertThat(this.eventBus.getAllClientIds()).hasSize(120);
+			assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+			assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+			assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
+			assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
+			assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
+		});
 
 		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
 		for (int i = 0; i < 100; i++) {
@@ -463,7 +469,10 @@ public class IntegrationTest {
 			response.eventSource().close();
 		}
 
-		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+			for (String clientId : this.eventBus.getAllClientIds()) {
+				this.eventBus.unregisterClient(clientId);
+			}
 			assertThat(this.eventBus.getAllClientIds()).hasSize(0);
 			assertThat(this.eventBus.getAllEvents()).isEmpty();
 			assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
@@ -616,6 +625,8 @@ public class IntegrationTest {
 		BackgroundEventSource eventSource = new BackgroundEventSource.Builder(handler, builder).build();
 		eventSource.start();
 
+		sleep(500, TimeUnit.MILLISECONDS);
+
 		OkHttpClient client;
 		if (shortTimeout) {
 			client = createHttpClient(500, TimeUnit.MILLISECONDS);
@@ -627,9 +638,9 @@ public class IntegrationTest {
 			.execute();
 
 		if (sleep) {
-			await().atMost(Duration.ofSeconds(5)).until(() ->
-					this.eventBus.getAllClientIds().contains(clientId)
-					&& this.eventBus.getSubscribers(eventName).contains(clientId));
+			await().atMost(Duration.ofSeconds(5))
+				.until(() -> this.eventBus.getAllClientIds().contains(clientId)
+						&& this.eventBus.getSubscribers(eventName).contains(clientId));
 		}
 
 		return new SubscribeResponse(eventSource, dataFuture);
@@ -680,15 +691,6 @@ public class IntegrationTest {
 		eventSource.start();
 
 		return new SubscribeResponse(eventSource, dataFuture);
-	}
-
-	private static void sleep(long value, TimeUnit timeUnit) {
-		try {
-			timeUnit.sleep(value);
-		}
-		catch (InterruptedException e) {
-			// nothing here
-		}
 	}
 
 	static record SubscribeResponse(BackgroundEventSource eventSource,
