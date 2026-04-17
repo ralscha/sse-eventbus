@@ -52,10 +52,10 @@ On the client side an application interacts with the [EventSource](https://devel
 This object is responsible for sending the SSE request to the server and calling listeners
 the application registered on this object. 
 As mentioned before the client has to send an id that should be unique among all the clients. 
-A simple way is to use libraries like [node-uuid](https://github.com/kelektiv/node-uuid) that generates UUIDs.
+A simple way is to use the browser's built-in Web Crypto API and call `crypto.randomUUID()`.
 
 ```
-const uuid = uuid();
+const uuid = crypto.randomUUID();
 const eventSource = new EventSource(`/register/${uuid}`);
 eventSource.addEventListener('message', response => {
   //handle the response from the server
@@ -110,7 +110,7 @@ The library is hosted on the Central Maven Repository
   <dependency>
     <groupId>ch.rasc</groupId>
     <artifactId>sse-eventbus</artifactId>
-    <version>2.0.0</version>
+    <version>3.0.0</version>
   </dependency>  
 ```
 
@@ -127,20 +127,9 @@ Kotlin with CoroutineScope example:
 
 ## More information
 Articles about Server-Sent Events    
+* https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
 * https://hpbn.co/server-sent-events-sse/   
-* https://www.html5rocks.com/en/tutorials/eventsource/basics/
-
-
-## Browser Support
-SSE is supported in most browsers. The notable exceptions are the browsers from Microsoft IE and Edge.   
-http://caniuse.com/#feat=eventsource
-
-Fortunately it is possible to polyfill the SSE support where it's missing. 
-
-* **[EventSource](https://github.com/remy/polyfills/blob/master/EventSource.js)** by Remy Sharp
-* **[jQuery.EventSource](http://github.com/rwldrn/jquery.eventsource)** by Rick Waldron
-* **[EventSource](https://github.com/Yaffle/EventSource)** by Yaffle
-* **[EventSource](https://github.com/amvtek/EventSource)** by AmvTek
+* https://web.dev/articles/eventsource-basics
 
 
 ## Changelog
