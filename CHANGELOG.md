@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1.0 - April ??, 2026
+## 3.1.0 - April 18, 2026
 * Add replay and resume support with `ReplayStore`, event retention, and `Last-Event-ID` handling
 
 ## 3.0.0 - December 6, 2025
