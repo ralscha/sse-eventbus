@@ -22,14 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import tools.jackson.databind.ObjectMapper;
-
 import ch.rasc.sse.eventbus.DataObjectConverter;
 import ch.rasc.sse.eventbus.DefaultDataObjectConverter;
 import ch.rasc.sse.eventbus.DefaultSubscriptionRegistry;
 import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
+import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SseEventBus;
 import ch.rasc.sse.eventbus.SubscriptionRegistry;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * To enable the SSE EventBus library create a @Configuration class that either
@@ -55,6 +55,9 @@ public class DefaultSseEventBusConfiguration {
 	@Autowired(required = false)
 	protected SubscriptionRegistry subscriptionRegistry;
 
+	@Autowired(required = false)
+	protected ReplayStore replayStore;
+
 	@Bean
 	public SseEventBus eventBus() {
 		SseEventBusConfigurer config = this.configurer;
@@ -66,6 +69,11 @@ public class DefaultSseEventBusConfiguration {
 		SubscriptionRegistry registry = this.subscriptionRegistry;
 		if (registry == null) {
 			registry = new DefaultSubscriptionRegistry();
+		}
+
+		ReplayStore store = this.replayStore;
+		if (store == null) {
+			store = config.replayStore();
 		}
 
 		List<DataObjectConverter> converters = this.dataObjectConverters;
@@ -80,7 +88,7 @@ public class DefaultSseEventBusConfiguration {
 			converters.add(new DefaultDataObjectConverter());
 		}
 
-		SseEventBus sseEventBus = new SseEventBus(config, registry, converters);
+		SseEventBus sseEventBus = new SseEventBus(config, registry, converters, store);
 
 		return sseEventBus;
 	}

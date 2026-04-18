@@ -18,6 +18,7 @@ package ch.rasc.sse.eventbus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -31,17 +32,34 @@ public class TestController {
 	}
 
 	@GetMapping("/register/{id}")
-	public SseEmitter eventbus(@PathVariable("id") String id) {
+	public SseEmitter eventbus(@PathVariable("id") String id,
+			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
+		if (lastEventId != null && !lastEventId.isEmpty()) {
+			SseEmitter emitter = new SseEmitter(3_000L);
+			emitter.onTimeout(emitter::complete);
+			this.eventBus.registerClient(id, emitter, false, lastEventId);
+			return emitter;
+		}
 		return this.eventBus.createSseEmitter(id, 3_000L);
 	}
 
 	@GetMapping("/register/{id}/{event}")
-	public SseEmitter eventbus(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public SseEmitter eventbus(@PathVariable("id") String id, @PathVariable("event") String event,
+			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
+		if (lastEventId != null && !lastEventId.isEmpty()) {
+			return this.eventBus.createReplayableSseEmitter(id, 30_000L, false, false, lastEventId,
+					event.split(","));
+		}
 		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
 	}
 
 	@GetMapping("/registerOnly/{id}/{event}")
-	public SseEmitter eventbusOnly(@PathVariable("id") String id, @PathVariable("event") String event) {
+	public SseEmitter eventbusOnly(@PathVariable("id") String id, @PathVariable("event") String event,
+			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
+		if (lastEventId != null && !lastEventId.isEmpty()) {
+			return this.eventBus.createReplayableSseEmitter(id, 3_000L, true, false, lastEventId,
+					event.split(","));
+		}
 		return this.eventBus.createSseEmitter(id, 3_000L, true, event.split(","));
 	}
 

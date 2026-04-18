@@ -15,21 +15,16 @@
  */
 package ch.rasc.sse.eventbus;
 
-import static ch.rasc.sse.eventbus.TestUtils.sleep;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.fail;
-
 import java.io.IOException;
-import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,15 +33,9 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationEventPublisher;
 
-import com.launchdarkly.eventsource.ConnectStrategy;
-import com.launchdarkly.eventsource.EventSource;
-import com.launchdarkly.eventsource.background.BackgroundEventHandler;
-import com.launchdarkly.eventsource.background.BackgroundEventSource;
-
-import ch.rasc.sse.eventbus.IntegrationTest.ResponseData;
-import ch.rasc.sse.eventbus.IntegrationTest.SubscribeResponse;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
+import ch.rasc.sse.eventbus.SseTestClientSupport.ResponseData;
+import ch.rasc.sse.eventbus.SseTestClientSupport.SseResponse;
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
 
 @SuppressWarnings("resource")
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, classes = TestDefaultConfiguration.class)
@@ -147,9 +136,12 @@ public class ListenerTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventBus.handleEvent(sseEvent);
 
-		sleep(500, TimeUnit.MILLISECONDS);
+		await().atMost(Duration.ofSeconds(5))
+			.until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
+		await().atMost(Duration.ofSeconds(10))
+			.until(() -> this.testListener.getAfterEventSentOk().size() >= 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"), new ResponseData("eventName", "payload3"));
 
@@ -166,18 +158,7 @@ public class ListenerTest {
 		return "http://localhost:" + this.port + path;
 	}
 
-	private static OkHttpClient createHttpClient() {
-		return createHttpClient(10, TimeUnit.SECONDS);
-	}
-
-	private static OkHttpClient createHttpClient(long timeout, TimeUnit timeUnit) {
-		return new OkHttpClient.Builder().connectTimeout(timeout, timeUnit)
-			.writeTimeout(timeout, timeUnit)
-			.readTimeout(timeout, timeUnit)
-			.build();
-	}
-
-	private static void assertSseResponse(SubscribeResponse response, ResponseData... expected) {
+	private static void assertSseResponse(SseResponse<ResponseData> response, ResponseData... expected) {
 		try {
 			List<ResponseData> rds;
 			try {
@@ -198,45 +179,21 @@ public class ListenerTest {
 		}
 	}
 
-	private SubscribeResponse registerSubscribe(String clientId, String eventName, int expectedNoOfData)
+	private SseResponse<ResponseData> registerSubscribe(String clientId, String eventName, int expectedNoOfData)
 			throws IOException {
 		return registerSubscribe(clientId, eventName, false, expectedNoOfData);
 	}
 
-	private SubscribeResponse registerSubscribe(String clientId, String eventName, boolean shortTimeout,
+	private SseResponse<ResponseData> registerSubscribe(String clientId, String eventName, boolean shortTimeout,
 			int expectedNoOfData) throws IOException {
 
-		CompletableFuture<List<ResponseData>> dataFuture = new CompletableFuture<>();
-		List<ResponseData> responses = new ArrayList<>();
-
-		EventSource.Builder builder = new EventSource.Builder(
-				ConnectStrategy.http(URI.create(testUrl("/register/" + clientId)))
-					.connectTimeout(10, TimeUnit.SECONDS));
-
-		BackgroundEventHandler handler = (DefaultEventHandler) (event, messageEvent) -> {
-			responses.add(new ResponseData(event, messageEvent.getData()));
-			if (responses.size() == expectedNoOfData) {
-				dataFuture.complete(responses);
-			}
-		};
-		BackgroundEventSource backgroundEventSource = new BackgroundEventSource.Builder(handler, builder).build();
-		backgroundEventSource.start();
-
-		sleep(500, TimeUnit.MILLISECONDS);
-
-		OkHttpClient client;
-		if (shortTimeout) {
-			client = createHttpClient(500, TimeUnit.MILLISECONDS);
-		}
-		else {
-			client = createHttpClient();
-		}
-		client.newCall(new Request.Builder().get().url(testUrl("/subscribe/" + clientId + "/" + eventName)).build())
-			.execute();
-		await().atMost(Duration.ofSeconds(5))
-			.until(() -> this.eventBus.getAllClientIds().contains(clientId)
-					&& this.eventBus.getSubscribers(eventName).contains(clientId));
-		return new SubscribeResponse(backgroundEventSource, dataFuture);
+		SseResponse<ResponseData> response = SseTestClientSupport.open(testUrl("/register/" + clientId),
+				expectedNoOfData, null, (event, messageEvent) -> new ResponseData(event, messageEvent.getData()));
+		SseTestClientSupport.awaitClientRegistered(this.eventBus, clientId);
+		SseTestClientSupport.invokeGet(testUrl("/subscribe/" + clientId + "/" + eventName), shortTimeout);
+		SseTestClientSupport.awaitClientSubscribed(this.eventBus, clientId, eventName);
+		SseTestClientSupport.settleSubscription();
+		return response;
 	}
 
 }

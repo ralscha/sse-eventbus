@@ -25,6 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import ch.rasc.sse.eventbus.Client;
 import ch.rasc.sse.eventbus.ClientEvent;
+import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SseEventBusListener;
 
 /**
@@ -134,6 +135,33 @@ public interface SseEventBusConfigurer {
 	 */
 	default Duration heartbeatInterval() {
 		return Duration.ZERO;
+	}
+
+	/**
+	 * Optional store for replaying events after reconnect.
+	 * <p>
+	 * Default: disabled
+	 */
+	default ReplayStore replayStore() {
+		return null;
+	}
+
+	/**
+	 * Maximum age of replayable events kept in the replay store.
+	 * <p>
+	 * Default: 5 minutes
+	 */
+	default Duration replayRetention() {
+		return Duration.ofMinutes(5);
+	}
+
+	/**
+	 * Specifies the delay between runs of the internal replay cleanup job.
+	 * <p>
+	 * Default: {@link #replayRetention()}
+	 */
+	default Duration replayCleanupJobDelay() {
+		return replayRetention();
 	}
 
 }

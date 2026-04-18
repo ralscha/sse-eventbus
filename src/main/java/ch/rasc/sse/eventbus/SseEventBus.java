@@ -24,10 +24,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -76,18 +78,34 @@ public class SseEventBus {
 
 	private final Duration heartbeatInterval;
 
+	private final Duration replayRetention;
+
+	private final Duration replayCleanupJobDelay;
+
 	private final boolean schedulerEnabled;
 
+	private final boolean replayEnabled;
+
 	private final int sendWorkerCount;
+
+	private final ReplayStore replayStore;
+
+	/**
+	 * Per-client locks used to make {@link #storeReplayEvent} + {@link #queueOrSend}
+	 * atomic with respect to {@link #replayMissedEvents}, preventing duplicate or
+	 * out-of-order delivery on reconnect.
+	 */
+	private final ConcurrentMap<String, ReentrantLock> replayLocks = new ConcurrentHashMap<>();
 
 	/**
 	 * Creates a new instance of the SseEventBus.
 	 * @param configurer The configurer to use for this instance.
 	 * @param subscriptionRegistry The subscription registry to use for this instance.
 	 * @param dataObjectConverters The list of data object converters.
+     * @param replayStore The replay store to use for this instance.
 	 */
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
-			List<DataObjectConverter> dataObjectConverters) {
+			List<DataObjectConverter> dataObjectConverters, ReplayStore replayStore) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
@@ -107,6 +125,10 @@ public class SseEventBus {
 		this.schedulerDelay = configurer.schedulerDelay();
 		this.clientExpirationJobDelay = configurer.clientExpirationJobDelay();
 		this.heartbeatInterval = configurer.heartbeatInterval();
+		this.replayStore = replayStore;
+		this.replayEnabled = replayStore != null;
+		this.replayRetention = configurer.replayRetention();
+		this.replayCleanupJobDelay = configurer.replayCleanupJobDelay();
 
 		this.dataObjectConverters = dataObjectConverters != null
 				? Collections.unmodifiableList(new ArrayList<>(dataObjectConverters)) : List.of();
@@ -129,6 +151,11 @@ public class SseEventBus {
 			if (!this.heartbeatInterval.isZero() && !this.heartbeatInterval.isNegative()) {
 				this.taskScheduler.scheduleWithFixedDelay(this::sendHeartbeat, this.heartbeatInterval.toMillis(),
 						this.heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS);
+			}
+			if (this.replayEnabled && !this.replayCleanupJobDelay.isZero() && !this.replayCleanupJobDelay.isNegative()) {
+				this.taskScheduler.scheduleWithFixedDelay(this::purgeExpiredReplayEvents,
+						this.replayCleanupJobDelay.toMillis(), this.replayCleanupJobDelay.toMillis(),
+						TimeUnit.MILLISECONDS);
 			}
 			logger.info("SseEventBus started with " + this.sendWorkerCount + " send worker(s)");
 		}
@@ -155,7 +182,10 @@ public class SseEventBus {
 			this.sendQueue.drainTo(remaining);
 			for (ClientEvent clientEvent : remaining) {
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
-					sendEventToClient(clientEvent);
+					Exception exception = sendEventToClient(clientEvent);
+					if (exception != null && logger.isDebugEnabled()) {
+						logger.debug("Shutdown flush failed for client " + clientEvent.getClient().getId(), exception);
+					}
 				}
 			}
 			if (!remaining.isEmpty()) {
@@ -256,6 +286,38 @@ public class SseEventBus {
 	}
 
 	/**
+	 * Creates a replay-aware {@link SseEmitter}, subscribes the client to the provided
+	 * events and replays retained events after the provided {@code lastEventId}.
+	 * @param clientId unique client identifier
+	 * @param timeout timeout value in milliseconds
+	 * @param unsubscribe if true unsubscribes from all events that are not provided with
+	 * the events parameter
+	 * @param completeAfterMessage if true the connection is closed after the first
+	 * message
+	 * @param lastEventId last event id received by the reconnecting client
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
+	public SseEmitter createReplayableSseEmitter(String clientId, Long timeout, boolean unsubscribe,
+			boolean completeAfterMessage, String lastEventId, String... events) {
+		SseEmitter emitter = createSseEmitter(clientId, timeout, unsubscribe, completeAfterMessage, events);
+		replayMissedEvents(clientId, lastEventId);
+		return emitter;
+	}
+
+	/**
+	 * Creates a replay-aware {@link SseEmitter} with a default timeout of 180_000
+	 * milliseconds (3 minutes).
+	 * @param clientId unique client identifier
+	 * @param lastEventId last event id received by the reconnecting client
+	 * @param events events the client wants to subscribe
+	 * @return a new SseEmitter instance
+	 */
+	public SseEmitter createReplayableSseEmitter(String clientId, String lastEventId, String... events) {
+		return createReplayableSseEmitter(clientId, 180_000L, false, false, lastEventId, events);
+	}
+
+	/**
 	 * Registers a client.
 	 * @param clientId unique client identifier
 	 * @param emitter the SseEmitter of the client
@@ -282,8 +344,9 @@ public class SseEventBus {
 			existing.updateCompleteAfterMessage(completeAfterMessage);
 			existing.updateLastTransfer();
 			return existing;
-		});
-		if (oldEmitter.get() != null) {
+		});		if (this.replayEnabled) {
+			this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
+		}		if (oldEmitter.get() != null) {
 			try {
 				oldEmitter.get().complete();
 			}
@@ -300,6 +363,20 @@ public class SseEventBus {
 	}
 
 	/**
+	 * Registers a client and replays retained events after the provided last event id.
+	 * @param clientId unique client identifier
+	 * @param emitter the SseEmitter of the client
+	 * @param completeAfterMessage if true the connection is closed after sending the
+	 * first message
+	 * @param lastEventId last event id received by the reconnecting client
+	 */
+	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage,
+			String lastEventId) {
+		registerClient(clientId, emitter, completeAfterMessage);
+		replayMissedEvents(clientId, lastEventId);
+	}
+
+	/**
 	 * Unregisters a client and unsubscribes the client from all events.
 	 * @param clientId unique client identifier
 	 */
@@ -310,6 +387,9 @@ public class SseEventBus {
 			this.subscriptionRegistry.unsubscribeAll(id);
 			return null;
 		});
+		removePendingReplayableEvents(clientId);
+		clearReplayEvents(clientId);
+		this.replayLocks.remove(clientId);
 		if (removedEmitter.get() != null) {
 			try {
 				removedEmitter.get().complete();
@@ -405,8 +485,23 @@ public class SseEventBus {
 							convertedValue = this.convertObject(event);
 							converted = true;
 						}
-						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-						queueOrSend(clientEvent, true);
+						if (this.replayEnabled) {
+							ReentrantLock lock = this.replayLocks.computeIfAbsent(subscriberId,
+									k -> new ReentrantLock());
+							lock.lock();
+							try {
+								storeReplayEvent(subscriberId, event, convertedValue);
+								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
+								queueOrSend(clientEvent, true);
+							}
+							finally {
+								lock.unlock();
+							}
+						}
+						else {
+							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
+							queueOrSend(clientEvent, true);
+						}
 					}
 				}
 			}
@@ -419,8 +514,23 @@ public class SseEventBus {
 							convertedValue = this.convertObject(event);
 							converted = true;
 						}
-						ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-						queueOrSend(clientEvent, true);
+						if (this.replayEnabled) {
+							ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId,
+									k -> new ReentrantLock());
+							lock.lock();
+							try {
+								storeReplayEvent(clientId, event, convertedValue);
+								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
+								queueOrSend(clientEvent, true);
+							}
+							finally {
+								lock.unlock();
+							}
+						}
+						else {
+							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
+							queueOrSend(clientEvent, true);
+						}
 					}
 				}
 			}
@@ -571,7 +681,7 @@ public class SseEventBus {
 			}
 			return null;
 		}
-		catch (Exception e) {
+		catch (java.io.IOException | RuntimeException e) {
 			return e;
 		}
 
@@ -615,10 +725,13 @@ public class SseEventBus {
 				});
 				if (removedEmitter.get() != null) {
 					actuallyRemoved.add(clientId);
+					removePendingReplayableEvents(clientId);
+					clearReplayEvents(clientId);
+					this.replayLocks.remove(clientId);
 					try {
 						removedEmitter.get().complete();
 					}
-					catch (Exception e) {
+					catch (RuntimeException e) {
 						logger.debug("Error completing emitter for client " + clientId, e);
 					}
 				}
@@ -723,16 +836,98 @@ public class SseEventBus {
 		return this.errorQueue.size();
 	}
 
+	/**
+	 * Replays retained events after the provided last event id to a currently registered
+	 * client.
+	 * @param clientId unique client identifier
+	 * @param lastEventId last event id received by the reconnecting client
+	 */
+	public void replayMissedEvents(String clientId, String lastEventId) {
+		if (!this.replayEnabled || lastEventId == null || lastEventId.isEmpty()) {
+			return;
+		}
+
+		Client client = this.clients.get(clientId);
+		if (client == null) {
+			return;
+		}
+
+		// Acquire the per-client lock so that store+queue in handleEvent cannot
+		// interleave with the remove-pending + re-queue sequence here. Without this
+		// lock a concurrent handleEvent could add an event to both the store (before
+		// getEventsSince) and the send queue (after removePendingReplayableEvents),
+		// resulting in duplicate or out-of-order delivery.
+		ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
+		lock.lock();
+		try {
+			removePendingReplayableEvents(clientId);
+
+			for (ReplayEvent replayEvent : this.replayStore.getEventsSince(clientId, lastEventId)) {
+				if (!this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
+						replayEvent.sseEvent().event())) {
+					continue;
+				}
+				queueOrSend(new ClientEvent(client, replayEvent.sseEvent(), replayEvent.convertedValue()), true);
+			}
+		}
+		catch (InterruptedException e) {
+			logger.error("replayMissedEvents failed", e);
+			Thread.currentThread().interrupt();
+		}
+		finally {
+			lock.unlock();
+		}
+	}
+
 	private void sendHeartbeat() {
 		for (Client client : this.clients.values()) {
 			try {
 				client.sseEmitter().send(SseEmitter.event().comment("heartbeat"));
 				client.updateLastTransfer();
 			}
-			catch (Exception e) {
+			catch (java.io.IOException | RuntimeException e) {
 				logger.debug("Heartbeat failed for client " + client.getId(), e);
 			}
 		}
+	}
+
+	private void storeReplayEvent(String clientId, SseEvent event, String convertedValue) {
+		if (!this.replayEnabled || event.id().isEmpty() || event.id().get().isEmpty()) {
+			return;
+		}
+		this.replayStore.store(new ReplayEvent(clientId, event, resolveReplayValue(event, convertedValue),
+				System.currentTimeMillis()));
+	}
+
+	private static String resolveReplayValue(SseEvent event, String convertedValue) {
+		if (convertedValue != null) {
+			return convertedValue;
+		}
+		if (event.data() instanceof String stringData) {
+			return stringData;
+		}
+		return null;
+	}
+
+	private void removePendingReplayableEvents(String clientId) {
+		this.sendQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
+				&& clientEvent.getSseEvent().id().isPresent());
+		this.errorQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
+				&& clientEvent.getSseEvent().id().isPresent());
+	}
+
+	private void purgeExpiredReplayEvents() {
+		if (!this.replayEnabled) {
+			return;
+		}
+		this.replayStore.purgeExpired(System.currentTimeMillis() - this.replayRetention.toMillis());
+	}
+
+	private void clearReplayEvents(String clientId) {
+		if (!this.replayEnabled) {
+			return;
+		}
+		this.replayStore.clearClient(clientId);
 	}
 
 }

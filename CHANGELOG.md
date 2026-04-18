@@ -1,0 +1,108 @@
+# Changelog
+
+## 3.1.0 - April ??, 2026
+* Add replay and resume support with `ReplayStore`, event retention, and `Last-Event-ID` handling
+
+## 3.0.0 - December 6, 2025
+* Upgrade to Spring 7, Jackson 3
+
+## 2.0.0 - December 6, 2022
+* Upgrade to Spring 6 (javax. -> jakarta.)
+
+## 1.1.9 - February 18, 2020
+* Catch and log exceptions in event loop. Prevents the loop to terminate.
+
+## 1.1.8 - December 21, 2019
+* Resolves [Issue #13](https://github.com/ralscha/sse-eventbus/issues/13): Add lifecycle hooks
+* Resolves [Issue #12](https://github.com/ralscha/sse-eventbus/issues/12): Hide ImmutableSseEvent completely from public API
+
+## 1.1.7 - May 24, 2018
+* Resolves [Issue #8](https://github.com/ralscha/sse-eventbus/issues/8): Fix handling messages containing a new line character \n
+* Resolves [Issue #6](https://github.com/ralscha/sse-eventbus/issues/6): Make members of DefaultSseEventBusConfiguration protected for easier sub classing
+
+## 1.1.6 - March 21, 2018
+* Change client expiration job to fixed delay and add separate configuration for this delay. By default it is 1 day, you change this value by implementing `SseEventBusConfigurer.clientExpirationJobDelay`
+
+## 1.1.5 - January 7, 2018
+* Extract subscription registry code out of the SseEventBus class into the interface SubscriptionRegistry and the class DefaultSubscriptionRegistry.
+  This allows a project to customize the existing implementation or write their own implementation. To override the default implementation add a Spring managed bean of type SubscriptionRegistry to your project.
+
+  Example:
+
+  ```
+  @Component
+  public class CustomSubscriptionRegistry extends DefaultSubscriptionRegistry {
+
+    @Override
+    public boolean isClientSubscribedToEvent(String clientId, String eventName) {
+      return super.isClientSubscribedToEvent(clientId, eventName)
+          || super.isClientSubscribedToEvent(clientId, "*");
+    }
+  }
+  ```
+
+## 1.1.4 - December 15, 2017
+* Resolves [Issue #2](https://github.com/ralscha/sse-eventbus/issues/2). Make sure that your project depends on Spring 4.3.13 or newer.
+
+## 1.1.3 - September 12, 2017
+* Add the following public methods to the SseEventBus class to query events and subscribers.
+  * Set<String> getAllClientIds()
+  * Set<String> getAllEvents()
+  * Map<String, Set<String>> getAllSubscriptions()
+  * Set<String> getSubscribers(String event)
+  * int countSubscribers(String event)
+  * boolean hasSubscribers(String event)
+
+## 1.1.2 - July 16, 2017
+* Add a workaround for the Microsoft Edge browser where the polyfill no longer work correctly.
+  The createSseEmitter method supports an additional parameter that tells the library to complete (close) the connection after sending a message.
+  This way the system behaves like long polling instead of http streaming.
+
+  ```
+  boolean completeAfterMessage = true;
+  eventBus.createSseEmitter("client1", 180_000L, true, completeAfterMessage, "event1", "event2");
+  ```
+
+## 1.1.1 - July 8, 2017
+* Add support for automatic unregister clients from events during registering.
+  `SseEventBus.createSseEmitter` supports an additional boolean parameter. If true the method subscribes the client to the provided events and unsubscribes it from all other currently subscribed events.
+
+  ```
+  eventBus.createSseEmitter("client1", 180_000L, true, "event1", "event2");
+  ```
+
+  After this call the client is only subscribed to `event1` and `event2`.
+
+  Later in the application:
+
+  ```
+  eventBus.createSseEmitter("client1", 180_000L, true, "event1");
+  ```
+
+  After this call the client is only subscribed to `event1`. The method automatically unregistered the client from `event2`.
+
+## 1.1.0 - April 28, 2017
+* Add support for Jackson JSON View.
+
+  `SseEvent.builder().event("eventName").data(dataObj).jsonView(JsonViews.PUBLIC.class).build()`
+
+  To support that the interface `ch.rasc.sse.eventbus.DataObjectConverter` changed.
+  Instead of the `data` object the two methods receive the `SseEvent` object.
+
+  `1.0.x:  boolean supports(Object object);  String convert(Object object);`
+  `1.1.x:  boolean supports(SseEvent event); String convert(SseEvent event);`
+
+  To get the data object your code can call `event.data()`.
+
+## 1.0.1 - March 31, 2017
+* Add support for excluding clients with the `addExcludeClientId` method.
+
+  ```
+  SseEvent.builder().addExcludeClientId("2")
+        .event("eventName")
+        .data("payload")
+        .build();
+  ```
+
+## 1.0.0 - November 19, 2016
+* Initial release

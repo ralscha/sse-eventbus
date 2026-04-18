@@ -47,6 +47,21 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 	}
 
 	@Bean
+	public ReplayStore replayStoreBean() {
+		return new InMemoryReplayStore();
+	}
+
+	@Override
+	public ReplayStore replayStore() {
+		return replayStoreBean();
+	}
+
+	@Override
+	public Duration replayRetention() {
+		return Duration.ofMinutes(1);
+	}
+
+	@Bean
 	public DataObjectConverter testObject2Converter() {
 		return new DataObjectConverter() {
 
