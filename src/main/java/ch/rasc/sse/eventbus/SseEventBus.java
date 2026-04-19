@@ -32,6 +32,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +41,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
+import ch.rasc.sse.eventbus.observation.DefaultSseEventBusObservationConvention;
+import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext;
+import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext.Operation;
+import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
@@ -51,6 +57,8 @@ import jakarta.annotation.PreDestroy;
 public class SseEventBus {
 
 	private static final Log logger = LogFactory.getLog(SseEventBus.class);
+
+	private static final SseEventBusObservationConvention DEFAULT_OBSERVATION_CONVENTION = new DefaultSseEventBusObservationConvention();
 
 	/**
 	 * A map that holds all connected clients. The key is the client ID, and the value is
@@ -92,6 +100,10 @@ public class SseEventBus {
 
 	private final @Nullable ReplayStore replayStore;
 
+	private final ObservationRegistry observationRegistry;
+
+	private final SseEventBusObservationConvention observationConvention;
+
 	/**
 	 * Per-client locks used to make {@link #storeReplayEvent} + {@link #queueOrSend}
 	 * atomic with respect to {@link #replayMissedEvents}, preventing duplicate or
@@ -108,6 +120,24 @@ public class SseEventBus {
 	 */
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
 			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore) {
+		this(configurer, subscriptionRegistry, dataObjectConverters, replayStore, ObservationRegistry.NOOP,
+				DEFAULT_OBSERVATION_CONVENTION);
+	}
+
+	/**
+	 * Creates a new instance of the SseEventBus.
+	 * @param configurer The configurer to use for this instance.
+	 * @param subscriptionRegistry The subscription registry to use for this instance.
+	 * @param dataObjectConverters The list of data object converters.
+	 * @param replayStore The replay store to use for this instance.
+	 * @param observationRegistry The Micrometer observation registry.
+	 * @param observationConvention The observation convention used for emitted
+	 * observations.
+	 */
+	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
+			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore,
+			@Nullable ObservationRegistry observationRegistry,
+			@Nullable SseEventBusObservationConvention observationConvention) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
@@ -131,6 +161,9 @@ public class SseEventBus {
 		this.replayEnabled = replayStore != null;
 		this.replayRetention = configurer.replayRetention();
 		this.replayCleanupJobDelay = configurer.replayCleanupJobDelay();
+		this.observationRegistry = observationRegistry != null ? observationRegistry : ObservationRegistry.NOOP;
+		this.observationConvention = observationConvention != null ? observationConvention
+				: DEFAULT_OBSERVATION_CONVENTION;
 
 		this.dataObjectConverters = dataObjectConverters != null
 				? Collections.unmodifiableList(new ArrayList<>(dataObjectConverters)) : List.of();
@@ -340,33 +373,49 @@ public class SseEventBus {
 	 * first message
 	 */
 	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage) {
-		AtomicReference<SseEmitter> oldEmitter = new AtomicReference<>();
-		this.clients.compute(clientId, (id, existing) -> {
-			if (existing == null) {
-				return new Client(id, emitter, completeAfterMessage);
+		SseEventBusObservationContext observationContext = createObservationContext(Operation.REGISTER_CLIENT);
+		observationContext.setClientId(clientId);
+		observationContext.setCompleteAfterMessage(completeAfterMessage);
+		Observation observation = startObservation(observationContext);
+		try (Observation.Scope ignored = observation.openScope()) {
+			useObservationScope(ignored);
+			AtomicReference<SseEmitter> oldEmitter = new AtomicReference<>();
+			this.clients.compute(clientId, (id, existing) -> {
+				if (existing == null) {
+					return new Client(id, emitter, completeAfterMessage);
+				}
+				oldEmitter.set(existing.sseEmitter());
+				existing.updateEmitter(emitter);
+				existing.updateCompleteAfterMessage(completeAfterMessage);
+				existing.updateLastTransfer();
+				return existing;
+			});
+			if (this.replayEnabled) {
+				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
-			oldEmitter.set(existing.sseEmitter());
-			existing.updateEmitter(emitter);
-			existing.updateCompleteAfterMessage(completeAfterMessage);
-			existing.updateLastTransfer();
-			return existing;
-		});
-		if (this.replayEnabled) {
-			this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
+			if (oldEmitter.get() != null) {
+				try {
+					oldEmitter.get().complete();
+				}
+				catch (Exception e) {
+					logger.debug("Error completing old emitter for client " + clientId, e);
+				}
+				if (logger.isDebugEnabled()) {
+					logger.debug("Client re-registered: " + clientId);
+				}
+			}
+			else if (logger.isDebugEnabled()) {
+				logger.debug("Client registered: " + clientId);
+			}
+			observationContext.setOutcome("success");
 		}
-		if (oldEmitter.get() != null) {
-			try {
-				oldEmitter.get().complete();
-			}
-			catch (Exception e) {
-				logger.debug("Error completing old emitter for client " + clientId, e);
-			}
-			if (logger.isDebugEnabled()) {
-				logger.debug("Client re-registered: " + clientId);
-			}
+		catch (RuntimeException ex) {
+			observationContext.setOutcome("error");
+			observation.error(ex);
+			throw ex;
 		}
-		else if (logger.isDebugEnabled()) {
-			logger.debug("Client registered: " + clientId);
+		finally {
+			observation.stop();
 		}
 	}
 
@@ -389,25 +438,43 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 */
 	public void unregisterClient(String clientId) {
-		AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
-		this.clients.computeIfPresent(clientId, (id, client) -> {
-			removedEmitter.set(client.sseEmitter());
-			this.subscriptionRegistry.unsubscribeAll(id);
-			return null;
-		});
-		removePendingReplayableEvents(clientId);
-		clearReplayEvents(clientId);
-		this.replayLocks.remove(clientId);
-		if (removedEmitter.get() != null) {
-			try {
-				removedEmitter.get().complete();
+		SseEventBusObservationContext observationContext = createObservationContext(Operation.UNREGISTER_CLIENT);
+		observationContext.setClientId(clientId);
+		Observation observation = startObservation(observationContext);
+		try (Observation.Scope ignored = observation.openScope()) {
+			useObservationScope(ignored);
+			AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
+			this.clients.computeIfPresent(clientId, (id, client) -> {
+				removedEmitter.set(client.sseEmitter());
+				this.subscriptionRegistry.unsubscribeAll(id);
+				return null;
+			});
+			removePendingReplayableEvents(clientId);
+			clearReplayEvents(clientId);
+			this.replayLocks.remove(clientId);
+			if (removedEmitter.get() != null) {
+				try {
+					removedEmitter.get().complete();
+				}
+				catch (Exception e) {
+					logger.debug("Error completing emitter for client " + clientId, e);
+				}
+				if (logger.isDebugEnabled()) {
+					logger.debug("Client unregistered: " + clientId);
+				}
+				observationContext.setOutcome("success");
 			}
-			catch (Exception e) {
-				logger.debug("Error completing emitter for client " + clientId, e);
+			else {
+				observationContext.setOutcome("noop");
 			}
-			if (logger.isDebugEnabled()) {
-				logger.debug("Client unregistered: " + clientId);
-			}
+		}
+		catch (RuntimeException ex) {
+			observationContext.setOutcome("error");
+			observation.error(ex);
+			throw ex;
+		}
+		finally {
+			observation.stop();
 		}
 	}
 
@@ -475,7 +542,14 @@ public class SseEventBus {
 	 */
 	@EventListener
 	public void handleEvent(SseEvent event) {
-		try {
+		SseEventBusObservationContext observationContext = createObservationContext(Operation.HANDLE_EVENT);
+		observationContext.setEventName(event.event());
+		observationContext.setDirectEvent(!event.clientIds().isEmpty());
+		observationContext.setReplay(this.replayEnabled && event.id().isPresent());
+		Observation observation = startObservation(observationContext);
+		try (Observation.Scope ignored = observation.openScope()) {
+			useObservationScope(ignored);
+			int deliveryCount = 0;
 
 			@Nullable String convertedValue = null;
 			boolean converted = event.data() instanceof String;
@@ -501,6 +575,7 @@ public class SseEventBus {
 								storeReplayEvent(subscriberId, event, convertedValue);
 								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 								queueOrSend(clientEvent, true);
+								deliveryCount++;
 							}
 							finally {
 								lock.unlock();
@@ -509,6 +584,7 @@ public class SseEventBus {
 						else {
 							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 							queueOrSend(clientEvent, true);
+							deliveryCount++;
 						}
 					}
 				}
@@ -529,6 +605,7 @@ public class SseEventBus {
 								storeReplayEvent(clientId, event, convertedValue);
 								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 								queueOrSend(clientEvent, true);
+								deliveryCount++;
 							}
 							finally {
 								lock.unlock();
@@ -537,14 +614,27 @@ public class SseEventBus {
 						else {
 							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
 							queueOrSend(clientEvent, true);
+							deliveryCount++;
 						}
 					}
 				}
 			}
+			observationContext.setDeliveryCount(deliveryCount);
+			observationContext.setOutcome("success");
 		}
 		catch (InterruptedException e) {
+			observationContext.setOutcome("error");
+			observation.error(e);
 			logger.error("handleEvent failed", e);
 			Thread.currentThread().interrupt();
+		}
+		catch (RuntimeException ex) {
+			observationContext.setOutcome("error");
+			observation.error(ex);
+			throw ex;
+		}
+		finally {
+			observation.stop();
 		}
 	}
 
@@ -679,7 +769,30 @@ public class SseEventBus {
 		}
 	}
 
-	private static @Nullable Exception sendEventToClient(ClientEvent clientEvent) {
+	private @Nullable Exception sendEventToClient(ClientEvent clientEvent) {
+		SseEventBusObservationContext observationContext = createObservationContext(Operation.SEND_EVENT);
+		observationContext.setClientId(clientEvent.getClient().getId());
+		observationContext.setEventName(clientEvent.getSseEvent().event());
+		observationContext.setDirectEvent(!clientEvent.getSseEvent().clientIds().isEmpty());
+		observationContext.setReplay(this.replayEnabled && clientEvent.getSseEvent().id().isPresent());
+		observationContext.setCompleteAfterMessage(clientEvent.getClient().isCompleteAfterMessage());
+		observationContext.setAttempt(clientEvent.getErrorCounter() + 1);
+		Observation observation = startObservation(observationContext);
+		try (Observation.Scope ignored = observation.openScope()) {
+			useObservationScope(ignored);
+			@Nullable Exception exception = doSendEventToClient(clientEvent);
+			observationContext.setOutcome(exception == null ? "success" : "error");
+			if (exception != null) {
+				observation.error(exception);
+			}
+			return exception;
+		}
+		finally {
+			observation.stop();
+		}
+	}
+
+	private static @Nullable Exception doSendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
 			client.sseEmitter().send(clientEvent.createSseEventBuilder());
@@ -850,16 +963,27 @@ public class SseEventBus {
 	 * @param lastEventId last event id received by the reconnecting client
 	 */
 	public void replayMissedEvents(String clientId, @Nullable String lastEventId) {
+		SseEventBusObservationContext observationContext = createObservationContext(Operation.REPLAY_EVENTS);
+		observationContext.setClientId(clientId);
+		observationContext.setReplay(true);
+		observationContext.setLastEventIdPresent(lastEventId != null && !lastEventId.isEmpty());
+		Observation observation = startObservation(observationContext);
 		if (!this.replayEnabled || lastEventId == null || lastEventId.isEmpty()) {
+			observationContext.setOutcome("noop");
+			observation.stop();
 			return;
 		}
-		@Nullable ReplayStore replayStore = this.replayStore;
-		if (replayStore == null) {
+		@Nullable ReplayStore configuredReplayStore = this.replayStore;
+		if (configuredReplayStore == null) {
+			observationContext.setOutcome("noop");
+			observation.stop();
 			return;
 		}
 
 		@Nullable Client client = this.clients.get(clientId);
 		if (client == null) {
+			observationContext.setOutcome("noop");
+			observation.stop();
 			return;
 		}
 
@@ -871,21 +995,33 @@ public class SseEventBus {
 		ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 		lock.lock();
 		try {
+			int deliveryCount = 0;
 			removePendingReplayableEvents(clientId);
 
-			for (ReplayEvent replayEvent : replayStore.getEventsSince(clientId, lastEventId)) {
+			for (ReplayEvent replayEvent : configuredReplayStore.getEventsSince(clientId, lastEventId)) {
 				if (!this.subscriptionRegistry.isClientSubscribedToEvent(clientId, replayEvent.sseEvent().event())) {
 					continue;
 				}
 				queueOrSend(new ClientEvent(client, replayEvent.sseEvent(), replayEvent.convertedValue()), true);
+				deliveryCount++;
 			}
+			observationContext.setDeliveryCount(deliveryCount);
+			observationContext.setOutcome("success");
 		}
 		catch (InterruptedException e) {
+			observationContext.setOutcome("error");
+			observation.error(e);
 			logger.error("replayMissedEvents failed", e);
 			Thread.currentThread().interrupt();
 		}
+		catch (RuntimeException ex) {
+			observationContext.setOutcome("error");
+			observation.error(ex);
+			throw ex;
+		}
 		finally {
 			lock.unlock();
+			observation.stop();
 		}
 	}
 
@@ -905,11 +1041,11 @@ public class SseEventBus {
 		if (!this.replayEnabled || event.id().isEmpty() || event.id().get().isEmpty()) {
 			return;
 		}
-		@Nullable ReplayStore replayStore = this.replayStore;
-		if (replayStore == null) {
+		@Nullable ReplayStore configuredReplayStore = this.replayStore;
+		if (configuredReplayStore == null) {
 			return;
 		}
-		replayStore.store(new ReplayEvent(clientId, event, resolveReplayValue(event, convertedValue),
+		configuredReplayStore.store(new ReplayEvent(clientId, event, resolveReplayValue(event, convertedValue),
 				System.currentTimeMillis()));
 	}
 
@@ -927,6 +1063,19 @@ public class SseEventBus {
 		// Intentionally fire-and-forget. Errors surface via the executor and logs.
 	}
 
+	private static void useObservationScope(@SuppressWarnings("unused") Observation.Scope scope) {
+		// Scope must stay open for nested observations and context propagation.
+	}
+
+	private SseEventBusObservationContext createObservationContext(Operation operation) {
+		return new SseEventBusObservationContext(operation);
+	}
+
+	private Observation startObservation(SseEventBusObservationContext context) {
+		return Observation.createNotStarted(this.observationConvention, () -> context, this.observationRegistry)
+			.start();
+	}
+
 	private void removePendingReplayableEvents(String clientId) {
 		this.sendQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
 				&& clientEvent.getSseEvent().id().isPresent());
@@ -938,22 +1087,22 @@ public class SseEventBus {
 		if (!this.replayEnabled) {
 			return;
 		}
-		@Nullable ReplayStore replayStore = this.replayStore;
-		if (replayStore == null) {
+		@Nullable ReplayStore configuredReplayStore = this.replayStore;
+		if (configuredReplayStore == null) {
 			return;
 		}
-		replayStore.purgeExpired(System.currentTimeMillis() - this.replayRetention.toMillis());
+		configuredReplayStore.purgeExpired(System.currentTimeMillis() - this.replayRetention.toMillis());
 	}
 
 	private void clearReplayEvents(String clientId) {
 		if (!this.replayEnabled) {
 			return;
 		}
-		@Nullable ReplayStore replayStore = this.replayStore;
-		if (replayStore == null) {
+		@Nullable ReplayStore configuredReplayStore = this.replayStore;
+		if (configuredReplayStore == null) {
 			return;
 		}
-		replayStore.clearClient(clientId);
+		configuredReplayStore.clearClient(clientId);
 	}
 
 }

@@ -202,6 +202,44 @@ Nullable contracts are declared explicitly for cases such as:
 * replay registration methods that accept a missing `Last-Event-ID`
 * optional configuration hooks such as `SseEventBusConfigurer.taskScheduler()` and `replayStore()`
 
+## Observability
+
+The library emits Micrometer observations that align with the Spring 7 / Spring Boot 4 observability model.
+If your application provides an `ObservationRegistry` bean, `SseEventBus` automatically publishes observations for:
+
+* client registration and unregister
+* event publication and fan-out
+* per-client send attempts
+* replay delivery
+
+The default observation name is `sse.eventbus`.
+Low-cardinality tags include:
+
+* `operation`
+* `outcome`
+* `mode`
+* `replay`
+
+High-cardinality tags include event and client identifiers, plus delivery metadata such as retry attempt.
+
+To customize names or tags, register your own `SseEventBusObservationConvention` bean.
+
+```
+@Configuration
+class ObservabilityConfiguration {
+
+  @Bean
+  SseEventBusObservationConvention sseEventBusObservationConvention() {
+    return new DefaultSseEventBusObservationConvention() {
+      @Override
+      public KeyValues getLowCardinalityKeyValues(SseEventBusObservationContext context) {
+        return super.getLowCardinalityKeyValues(context).and("component", "orders-sse");
+      }
+    };
+  }
+}
+```
+
 ## Demo
 Simple demo application:    
 https://github.com/ralscha/sse-eventbus-demo

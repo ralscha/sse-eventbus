@@ -18,6 +18,7 @@ package ch.rasc.sse.eventbus.config;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -30,6 +31,7 @@ import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
 import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SseEventBus;
 import ch.rasc.sse.eventbus.SubscriptionRegistry;
+import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -58,6 +60,12 @@ public class DefaultSseEventBusConfiguration {
 
 	@Autowired(required = false)
 	protected @Nullable ReplayStore replayStore;
+
+	@Autowired(required = false)
+	protected @Nullable ObservationRegistry observationRegistry;
+
+	@Autowired(required = false)
+	protected @Nullable SseEventBusObservationConvention observationConvention;
 
 	@Bean
 	public SseEventBus eventBus() {
@@ -89,7 +97,8 @@ public class DefaultSseEventBusConfiguration {
 			converters.add(new DefaultDataObjectConverter());
 		}
 
-		return new SseEventBus(config, registry, converters, store);
+		return new SseEventBus(config, registry, converters, store, this.observationRegistry,
+				this.observationConvention);
 	}
 
 }
