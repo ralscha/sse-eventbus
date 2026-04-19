@@ -13,20 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ch.rasc.sse.eventbus;
+@NullMarked
+package ch.rasc.sse.eventbus.config;
 
-import org.jspecify.annotations.Nullable;
-
-/**
- * Replay metadata for a single client-targeted event.
- * <p>
- * {@link #eventId()} is always non-empty for stored events; {@link ReplayStore#store} is
- * only called when the originating {@link SseEvent} carries a non-empty id.
- */
-public record ReplayEvent(String clientId, SseEvent sseEvent, @Nullable String convertedValue, long storedAt) {
-
-	public String eventId() {
-		return this.sseEvent.id().orElse("");
-	}
-
-}
+import org.jspecify.annotations.NullMarked;

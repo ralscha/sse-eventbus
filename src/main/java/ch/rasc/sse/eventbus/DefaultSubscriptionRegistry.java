@@ -22,6 +22,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Default implementation of {@link SubscriptionRegistry}. This implementation is
  * thread-safe.
@@ -58,7 +60,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public boolean isClientSubscribedToEvent(String clientId, String eventName) {
-		Set<String> subscribedClients = this.eventSubscribers.get(eventName);
+		@Nullable Set<String> subscribedClients = this.eventSubscribers.get(eventName);
 		if (subscribedClients != null) {
 			return subscribedClients.contains(clientId);
 		}
@@ -81,7 +83,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public Set<String> getSubscribers(String event) {
-		Set<String> clientIds = this.eventSubscribers.get(event);
+		@Nullable Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
 			return Set.copyOf(clientIds);
 		}
@@ -90,7 +92,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public int countSubscribers(String event) {
-		Set<String> clientIds = this.eventSubscribers.get(event);
+		@Nullable Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
 			return clientIds.size();
 		}
@@ -104,7 +106,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 
 	@Override
 	public void unsubscribeAll(String clientId) {
-		Set<String> events = this.clientEvents.remove(clientId);
+		@Nullable Set<String> events = this.clientEvents.remove(clientId);
 		if (events != null) {
 			for (String event : events) {
 				this.eventSubscribers.computeIfPresent(event,

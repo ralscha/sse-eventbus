@@ -183,6 +183,20 @@ The library is hosted on the Central Maven Repository
   </dependency>  
 ```
 
+## Null Safety
+
+The public API uses JSpecify annotations with package-level `@NullMarked` defaults.
+Unless an API element is annotated with `@Nullable`, values should be treated as non-null.
+
+Build-time nullness checking is enforced with Error Prone and the NullAway plugin.
+
+Nullable contracts are declared explicitly for cases such as:
+
+* `SseEvent.data()` and factory methods that allow events without data
+* `DataObjectConverter.convert(...)` implementations that may return `null`
+* replay registration methods that accept a missing `Last-Event-ID`
+* optional configuration hooks such as `SseEventBusConfigurer.taskScheduler()` and `replayStore()`
+
 ## Demo
 Simple demo application:    
 https://github.com/ralscha/sse-eventbus-demo

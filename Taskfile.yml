@@ -1,0 +1,38 @@
+version: '3'
+
+vars:
+  MVNW: '{{if eq OS "windows"}}cmd /c mvnw.cmd{{else}}./mvnw{{end}}'
+
+tasks:
+  format:
+    desc: Apply Spring Java Format
+    cmds:
+      - '{{.MVNW}} -B -ntp spring-javaformat:apply'
+
+  sortpom:
+    desc: Sort pom.xml with SortPom
+    cmds:
+      - '{{.MVNW}} -B -ntp sortpom:sort'
+
+  test:
+    desc: Run the Maven test suite
+    cmds:
+      - '{{.MVNW}} -B -ntp test'
+
+  package:
+    desc: Build the jar without rerunning tests
+    cmds:
+      - '{{.MVNW}} -B -ntp package -DskipTests'
+
+  build:
+    desc: Format, sort pom, test, and build
+    cmds:
+      - task: format
+      - task: sortpom
+      - task: test
+      - task: package
+
+  default:
+    desc: "List all available tasks"
+    cmds:
+      - task --list-all

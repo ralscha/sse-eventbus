@@ -15,15 +15,15 @@
  */
 package ch.rasc.sse.eventbus;
 
-import static ch.rasc.sse.eventbus.TestUtils.sleep;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +33,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import ch.rasc.sse.eventbus.config.EnableSseEventBus;
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 
@@ -63,7 +64,7 @@ public class SseEventBusSchedulerTest {
 		}
 
 		@Override
-		public ScheduledExecutorService taskScheduler() {
+		public @Nullable ScheduledExecutorService taskScheduler() {
 			return null;
 		}
 
@@ -84,24 +85,28 @@ public class SseEventBusSchedulerTest {
 		SseEmitter se1 = this.eventBus.createSseEmitter("1");
 		SseEmitter se2 = this.eventBus.createSseEmitter("2", 10_000L);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(client("1").sseEmitter()).isEqualTo(se1);
+		assertThat(client("2").sseEmitter()).isEqualTo(se2);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
 		sleep(1, TimeUnit.SECONDS);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(client("1").sseEmitter()).isEqualTo(se1);
+		assertThat(client("2").sseEmitter()).isEqualTo(se2);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
 
 		sleep(7, TimeUnit.SECONDS);
 		assertThat(this.eventBus.getAllClientIds()).containsOnly("1", "2");
-		assertThat(CLIENTS_MAP.get("1").sseEmitter()).isEqualTo(se1);
-		assertThat(CLIENTS_MAP.get("2").sseEmitter()).isEqualTo(se2);
+		assertThat(client("1").sseEmitter()).isEqualTo(se1);
+		assertThat(client("2").sseEmitter()).isEqualTo(se2);
 		assertThat(this.eventBus.getAllEvents()).isEmpty();
 		assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+	}
+
+	private static Client client(String clientId) {
+		return Objects.requireNonNull(CLIENTS_MAP.get(clientId));
 	}
 
 }

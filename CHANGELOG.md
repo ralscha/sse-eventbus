@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.1 - TBD
+* Add JSpecify null-safety annotations with package-level `@NullMarked` defaults for the public API and configuration hooks
+* Add Error Prone with NullAway to enforce nullness contracts during compilation
+
 ## 3.1.0 - April 18, 2026
 * Add replay and resume support with `ReplayStore`, event retention, and `Last-Event-ID` handling
 

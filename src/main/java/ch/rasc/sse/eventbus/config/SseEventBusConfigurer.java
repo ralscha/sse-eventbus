@@ -23,6 +23,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 
+import org.jspecify.annotations.Nullable;
+
 import ch.rasc.sse.eventbus.Client;
 import ch.rasc.sse.eventbus.ClientEvent;
 import ch.rasc.sse.eventbus.ReplayStore;
@@ -90,9 +92,9 @@ public interface SseEventBusConfigurer {
 	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
-	 * {@link Executors#newScheduledThreadPool(3)}
+	 * {@link Executors#newScheduledThreadPool(int) Executors.newScheduledThreadPool(3)}
 	 */
-	default ScheduledExecutorService taskScheduler() {
+	default @Nullable ScheduledExecutorService taskScheduler() {
 		return Executors.newScheduledThreadPool(3);
 	}
 
@@ -142,7 +144,7 @@ public interface SseEventBusConfigurer {
 	 * <p>
 	 * Default: disabled
 	 */
-	default ReplayStore replayStore() {
+	default @Nullable ReplayStore replayStore() {
 		return null;
 	}
 

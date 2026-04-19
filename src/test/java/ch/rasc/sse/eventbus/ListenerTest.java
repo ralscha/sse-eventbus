@@ -136,12 +136,10 @@ public class ListenerTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventBus.handleEvent(sseEvent);
 
-		await().atMost(Duration.ofSeconds(5))
-			.until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
+		await().atMost(Duration.ofSeconds(5)).until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
-		await().atMost(Duration.ofSeconds(10))
-			.until(() -> this.testListener.getAfterEventSentOk().size() >= 3);
+		await().atMost(Duration.ofSeconds(10)).until(() -> this.testListener.getAfterEventSentOk().size() >= 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
 				new ResponseData("eventName", "payload2"), new ResponseData("eventName", "payload3"));
 

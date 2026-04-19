@@ -17,6 +17,8 @@ package ch.rasc.sse.eventbus;
 
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Listen for internal events. All these methods are called synchronously.
  */
@@ -38,7 +40,7 @@ public interface SseEventBusListener {
 	 * @param exception <code>null</code> message has been sent successfully, otherwise
 	 * message delivery failed with this error
 	 */
-	default void afterEventSent(ClientEvent clientEvent, Exception exception) {
+	default void afterEventSent(ClientEvent clientEvent, @Nullable Exception exception) {
 		// no default implementation
 	}
 

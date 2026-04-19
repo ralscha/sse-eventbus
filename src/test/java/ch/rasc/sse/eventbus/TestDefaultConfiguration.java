@@ -17,6 +17,7 @@ package ch.rasc.sse.eventbus;
 
 import java.time.Duration;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -72,7 +73,10 @@ public class TestDefaultConfiguration implements SseEventBusConfigurer {
 
 			@Override
 			public String convert(SseEvent event) {
-				TestObject2 to = (TestObject2) event.data();
+				@Nullable Object data = event.data();
+				if (!(data instanceof TestObject2 to)) {
+					throw new IllegalStateException("Expected TestObject2 data");
+				}
 				return to.getId() + "," + to.getCustomer();
 			}
 		};

@@ -18,6 +18,7 @@ package ch.rasc.sse.eventbus;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -27,13 +28,13 @@ public class ClientEvent {
 
 	private final SseEvent event;
 
-	private final String convertedValue;
+	private final @Nullable String convertedValue;
 
 	private final AtomicInteger errorCounter;
 
 	private volatile long retryAfter;
 
-	public ClientEvent(Client client, SseEvent event, String convertedValue) {
+	public ClientEvent(Client client, SseEvent event, @Nullable String convertedValue) {
 		this.client = client;
 		this.event = event;
 		this.convertedValue = convertedValue;
@@ -67,7 +68,10 @@ public class ClientEvent {
 			addStringData(sseBuilder, stringData);
 		}
 		else {
-			sseBuilder.data(this.event.data());
+			@Nullable Object data = this.event.data();
+			if (data != null) {
+				sseBuilder.data(data);
+			}
 		}
 
 		return sseBuilder;
@@ -75,9 +79,12 @@ public class ClientEvent {
 	}
 
 	private static void addStringData(SseEventBuilder sseBuilder, String value) {
-		for (String line : value.split("\n")) {
-			sseBuilder.data(line);
+		int start = 0;
+		for (int index = value.indexOf('\n'); index >= 0; index = value.indexOf('\n', start)) {
+			sseBuilder.data(value.substring(start, index));
+			start = index + 1;
 		}
+		sseBuilder.data(value.substring(start));
 	}
 
 	void incErrorCounter() {

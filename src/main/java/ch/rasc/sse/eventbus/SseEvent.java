@@ -21,6 +21,7 @@ import java.util.Set;
 
 import org.immutables.value.Value;
 import org.immutables.value.Value.Style.ImplementationVisibility;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Represents an event that is sent to the client.
@@ -71,7 +72,7 @@ public interface SseEvent {
 	 * object to a String.
 	 * @return the event data
 	 */
-	Object data();
+	@Nullable Object data();
 
 	/**
 	 * The retry time in milliseconds.
@@ -97,7 +98,7 @@ public interface SseEvent {
 	 * @param data the data to send
 	 * @return a new SseEvent instance
 	 */
-	static SseEvent ofData(Object data) {
+	static SseEvent ofData(@Nullable Object data) {
 		return SseEvent.builder().data(data).build();
 	}
 
@@ -117,7 +118,7 @@ public interface SseEvent {
 	 * @param data the data to send
 	 * @return a new SseEvent instance
 	 */
-	static SseEvent of(String event, Object data) {
+	static SseEvent of(String event, @Nullable Object data) {
 		return SseEvent.builder().event(event).data(data).build();
 	}
 

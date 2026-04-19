@@ -17,6 +17,8 @@ package ch.rasc.sse.eventbus;
 
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Stores previously published events so reconnecting clients can resume from a known
  * event id.
@@ -26,8 +28,8 @@ public interface ReplayStore {
 	/**
 	 * Stores a replayable event for later delivery to a reconnecting client.
 	 * <p>
-	 * The caller guarantees that {@link ReplayEvent#eventId()} returns a non-empty string;
-	 * implementations may rely on this invariant.
+	 * The caller guarantees that {@link ReplayEvent#eventId()} returns a non-empty
+	 * string; implementations may rely on this invariant.
 	 * @param replayEvent the event to store
 	 */
 	void store(ReplayEvent replayEvent);
@@ -46,7 +48,7 @@ public interface ReplayStore {
 	 * empty to request all retained events
 	 * @return an ordered list of events to replay; never {@code null}
 	 */
-	List<ReplayEvent> getEventsSince(String clientId, String lastEventId);
+	List<ReplayEvent> getEventsSince(String clientId, @Nullable String lastEventId);
 
 	/**
 	 * Removes all retained events for {@code clientId}.

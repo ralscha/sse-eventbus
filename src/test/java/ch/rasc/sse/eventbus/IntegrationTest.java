@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import org.jspecify.annotations.Nullable;
 import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -141,7 +142,7 @@ public class IntegrationTest {
 			.event("eventName")
 			.data("the data line")
 			.id("123")
-			.retry(Duration.ofMillis(1000L))
+			.retry(Duration.ofSeconds(1))
 			.comment("the comment")
 			.build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -424,15 +425,12 @@ public class IntegrationTest {
 			.until(() -> this.eventBus.getAllClientIds().contains("1")
 					&& this.eventBus.getSubscribers("eventName").contains("1"));
 
-		this.eventPublisher.publishEvent(
-				SseEvent.builder().event("eventName").id("1").data("payload1").build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("eventName").id("1").data("payload1").build());
 		assertSseResponse(initialResponse, new ResponseData("eventName", "payload1", "1"));
 
 		sleep(200, TimeUnit.MILLISECONDS);
-		this.eventPublisher.publishEvent(
-				SseEvent.builder().event("eventName").id("2").data("payload2").build());
-		this.eventPublisher.publishEvent(
-				SseEvent.builder().event("eventName").id("3").data("payload3").build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("eventName").id("2").data("payload2").build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("eventName").id("3").data("payload3").build());
 
 		sleep(500, TimeUnit.MILLISECONDS);
 		initialResponse.eventSource().close();
@@ -452,8 +450,7 @@ public class IntegrationTest {
 			.until(() -> this.eventBus.getAllClientIds().contains("1")
 					&& this.eventBus.getSubscribers("eventName").contains("1"));
 
-		this.eventPublisher.publishEvent(
-				SseEvent.builder().event("eventName").id("1").data("payload1").build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("eventName").id("1").data("payload1").build());
 		assertSseResponse(initialResponse, new ResponseData("eventName", "payload1", "1"));
 		assertThat(this.replayStore.getEventsSince("1", null)).hasSize(1);
 
@@ -471,8 +468,7 @@ public class IntegrationTest {
 			.until(() -> this.eventBus.getAllClientIds().contains("1")
 					&& this.eventBus.getSubscribers("eventName").contains("1"));
 
-		this.eventPublisher.publishEvent(
-				SseEvent.builder().event("eventName").id("1").data("payload1").build());
+		this.eventPublisher.publishEvent(SseEvent.builder().event("eventName").id("1").data("payload1").build());
 		assertSseResponse(initialResponse, new ResponseData("eventName", "payload1", "1"));
 		assertThat(this.replayStore.getEventsSince("1", null)).hasSize(1);
 
@@ -664,8 +660,8 @@ public class IntegrationTest {
 			int expectedNoOfData, boolean sleep) throws IOException {
 
 		SseResponse<ResponseData> response = SseTestClientSupport.open(testUrl("/register/" + clientId),
-				expectedNoOfData, null,
-				(event, messageEvent) -> new ResponseData(event, messageEvent.getData(), messageEvent.getLastEventId()));
+				expectedNoOfData, null, (event, messageEvent) -> new ResponseData(event, messageEvent.getData(),
+						messageEvent.getLastEventId()));
 		SseTestClientSupport.awaitClientRegistered(this.eventBus, clientId);
 		SseTestClientSupport.invokeGet(testUrl("/subscribe/" + clientId + "/" + eventName), shortTimeout);
 		SseTestClientSupport.awaitClientSubscribed(this.eventBus, clientId, eventName);
@@ -686,16 +682,17 @@ public class IntegrationTest {
 	}
 
 	private SseResponse<ResponseData> registerAndSubscribe(String clientId, String eventName, int expectedNoOfData,
-			String lastEventId) {
+			@Nullable String lastEventId) {
 		return SseTestClientSupport.open(testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData,
-				lastEventId,
-				(event, messageEvent) -> new ResponseData(event, messageEvent.getData(), messageEvent.getLastEventId()));
+				lastEventId, (event, messageEvent) -> new ResponseData(event, messageEvent.getData(),
+						messageEvent.getLastEventId()));
 	}
 
-	private SseResponse<ResponseData> registerAndSubscribeOnly(String clientId, String eventName, int expectedNoOfData) {
-		SseResponse<ResponseData> response = SseTestClientSupport.open(
-				testUrl("/registerOnly/" + clientId + "/" + eventName), expectedNoOfData, null,
-				(event, messageEvent) -> new ResponseData(event, messageEvent.getData(), messageEvent.getLastEventId()));
+	private SseResponse<ResponseData> registerAndSubscribeOnly(String clientId, String eventName,
+			int expectedNoOfData) {
+		SseResponse<ResponseData> response = SseTestClientSupport
+			.open(testUrl("/registerOnly/" + clientId + "/" + eventName), expectedNoOfData, null, (event,
+					messageEvent) -> new ResponseData(event, messageEvent.getData(), messageEvent.getLastEventId()));
 		SseTestClientSupport.awaitClientSubscribed(this.eventBus, clientId, eventName);
 		return response;
 	}

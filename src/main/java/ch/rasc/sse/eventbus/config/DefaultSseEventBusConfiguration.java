@@ -18,6 +18,7 @@ package ch.rasc.sse.eventbus.config;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,39 +45,39 @@ import tools.jackson.databind.ObjectMapper;
 public class DefaultSseEventBusConfiguration {
 
 	@Autowired(required = false)
-	protected SseEventBusConfigurer configurer;
+	protected @Nullable SseEventBusConfigurer configurer;
 
 	@Autowired(required = false)
-	protected ObjectMapper objectMapper;
+	protected @Nullable ObjectMapper objectMapper;
 
 	@Autowired(required = false)
-	protected List<DataObjectConverter> dataObjectConverters;
+	protected @Nullable List<DataObjectConverter> dataObjectConverters;
 
 	@Autowired(required = false)
-	protected SubscriptionRegistry subscriptionRegistry;
+	protected @Nullable SubscriptionRegistry subscriptionRegistry;
 
 	@Autowired(required = false)
-	protected ReplayStore replayStore;
+	protected @Nullable ReplayStore replayStore;
 
 	@Bean
 	public SseEventBus eventBus() {
-		SseEventBusConfigurer config = this.configurer;
+		@Nullable SseEventBusConfigurer config = this.configurer;
 		if (config == null) {
 			config = new SseEventBusConfigurer() {
 				/* nothing_here */ };
 		}
 
-		SubscriptionRegistry registry = this.subscriptionRegistry;
+		@Nullable SubscriptionRegistry registry = this.subscriptionRegistry;
 		if (registry == null) {
 			registry = new DefaultSubscriptionRegistry();
 		}
 
-		ReplayStore store = this.replayStore;
+		@Nullable ReplayStore store = this.replayStore;
 		if (store == null) {
 			store = config.replayStore();
 		}
 
-		List<DataObjectConverter> converters = this.dataObjectConverters;
+		@Nullable List<DataObjectConverter> converters = this.dataObjectConverters;
 		if (converters == null) {
 			converters = new ArrayList<>();
 		}
@@ -88,9 +89,7 @@ public class DefaultSseEventBusConfiguration {
 			converters.add(new DefaultDataObjectConverter());
 		}
 
-		SseEventBus sseEventBus = new SseEventBus(config, registry, converters, store);
-
-		return sseEventBus;
+		return new SseEventBus(config, registry, converters, store);
 	}
 
 }

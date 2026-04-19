@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.jspecify.annotations.Nullable;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -32,7 +34,7 @@ public class JacksonDataObjectConverter implements DataObjectConverter {
 	}
 
 	@Override
-	public String convert(SseEvent event) {
+	public @Nullable String convert(SseEvent event) {
 		if (event.data() != null) {
 			try {
 				if (!event.jsonView().isPresent()) {

@@ -16,6 +16,7 @@
 package ch.rasc.sse.eventbus;
 
 import org.springframework.stereotype.Controller;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -47,8 +48,7 @@ public class TestController {
 	public SseEmitter eventbus(@PathVariable("id") String id, @PathVariable("event") String event,
 			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
 		if (lastEventId != null && !lastEventId.isEmpty()) {
-			return this.eventBus.createReplayableSseEmitter(id, 30_000L, false, false, lastEventId,
-					event.split(","));
+			return this.eventBus.createReplayableSseEmitter(id, 30_000L, false, false, lastEventId, event.split(","));
 		}
 		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
 	}
@@ -57,8 +57,7 @@ public class TestController {
 	public SseEmitter eventbusOnly(@PathVariable("id") String id, @PathVariable("event") String event,
 			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
 		if (lastEventId != null && !lastEventId.isEmpty()) {
-			return this.eventBus.createReplayableSseEmitter(id, 3_000L, true, false, lastEventId,
-					event.split(","));
+			return this.eventBus.createReplayableSseEmitter(id, 3_000L, true, false, lastEventId, event.split(","));
 		}
 		return this.eventBus.createSseEmitter(id, 3_000L, true, event.split(","));
 	}
@@ -72,7 +71,7 @@ public class TestController {
 	@ResponseBody
 	@GetMapping("/subscribe/{id}/{event}")
 	public void subscribe(@PathVariable("id") String id, @PathVariable("event") String event) {
-		String[] splittedEvents = event.split(",");
+		String[] splittedEvents = StringUtils.commaDelimitedListToStringArray(event);
 		for (String e : splittedEvents) {
 			this.eventBus.subscribe(id, e);
 		}
@@ -81,7 +80,7 @@ public class TestController {
 	@ResponseBody
 	@GetMapping("/unsubscribe/{id}/{event}")
 	public void unsubscribe(@PathVariable("id") String id, @PathVariable("event") String event) {
-		String[] splittedEvents = event.split(",");
+		String[] splittedEvents = StringUtils.commaDelimitedListToStringArray(event);
 		for (String e : splittedEvents) {
 			this.eventBus.unsubscribe(id, e);
 		}

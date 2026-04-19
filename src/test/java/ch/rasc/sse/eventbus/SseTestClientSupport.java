@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 import static org.awaitility.Awaitility.await;
+import org.jspecify.annotations.Nullable;
 
 import com.launchdarkly.eventsource.ConnectStrategy;
 import com.launchdarkly.eventsource.EventSource;
@@ -51,7 +52,7 @@ final class SseTestClientSupport {
 	private SseTestClientSupport() {
 	}
 
-	static <T> SseResponse<T> open(String url, int expectedNoOfData, String lastEventId,
+	static <T> SseResponse<T> open(String url, int expectedNoOfData, @Nullable String lastEventId,
 			BiFunction<String, MessageEvent, T> mapper) {
 		CompletableFuture<List<T>> dataFuture = new CompletableFuture<>();
 		List<T> responses = new ArrayList<>();
@@ -85,7 +86,8 @@ final class SseTestClientSupport {
 	}
 
 	static void invokeGet(String url, boolean shortTimeout) throws IOException {
-		OkHttpClient client = shortTimeout ? createHttpClient(SHORT_HTTP_TIMEOUT) : createHttpClient(CONNECTION_TIMEOUT);
+		OkHttpClient client = shortTimeout ? createHttpClient(SHORT_HTTP_TIMEOUT)
+				: createHttpClient(CONNECTION_TIMEOUT);
 		var response = client.newCall(new Request.Builder().get().url(url).build()).execute();
 		response.close();
 	}
@@ -101,7 +103,7 @@ final class SseTestClientSupport {
 	record SseResponse<T>(BackgroundEventSource eventSource, CompletableFuture<List<T>> dataFuture) {
 	}
 
-	record ResponseData(String event, String data, String id) {
+	record ResponseData(String event, String data, @Nullable String id) {
 
 		ResponseData(String event, String data) {
 			this(event, data, null);

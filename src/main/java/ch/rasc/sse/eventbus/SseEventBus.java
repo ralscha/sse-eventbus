@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,6 +34,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.event.EventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -58,7 +60,7 @@ public class SseEventBus {
 
 	private final SubscriptionRegistry subscriptionRegistry;
 
-	private final ScheduledExecutorService taskScheduler;
+	private final @Nullable ScheduledExecutorService taskScheduler;
 
 	private final int noOfSendResponseTries;
 
@@ -88,7 +90,7 @@ public class SseEventBus {
 
 	private final int sendWorkerCount;
 
-	private final ReplayStore replayStore;
+	private final @Nullable ReplayStore replayStore;
 
 	/**
 	 * Per-client locks used to make {@link #storeReplayEvent} + {@link #queueOrSend}
@@ -102,10 +104,10 @@ public class SseEventBus {
 	 * @param configurer The configurer to use for this instance.
 	 * @param subscriptionRegistry The subscription registry to use for this instance.
 	 * @param dataObjectConverters The list of data object converters.
-     * @param replayStore The replay store to use for this instance.
+	 * @param replayStore The replay store to use for this instance.
 	 */
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
-			List<DataObjectConverter> dataObjectConverters, ReplayStore replayStore) {
+			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
@@ -140,22 +142,24 @@ public class SseEventBus {
 	 */
 	@PostConstruct
 	public void init() {
-		if (this.schedulerEnabled) {
+		@Nullable ScheduledExecutorService scheduler = this.taskScheduler;
+		if (scheduler != null) {
 			for (int worker = 0; worker < this.sendWorkerCount; worker++) {
-				this.taskScheduler.submit(this::eventLoop);
+				ignoreFuture(scheduler.submit(this::eventLoop));
 			}
-			this.taskScheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0, this.schedulerDelay.toMillis(),
-					TimeUnit.MILLISECONDS);
-			this.taskScheduler.scheduleWithFixedDelay(this::cleanUpClients, 0, this.clientExpirationJobDelay.toMillis(),
-					TimeUnit.MILLISECONDS);
+			ignoreFuture(scheduler.scheduleWithFixedDelay(this::reScheduleFailedEvents, 0,
+					this.schedulerDelay.toMillis(), TimeUnit.MILLISECONDS));
+			ignoreFuture(scheduler.scheduleWithFixedDelay(this::cleanUpClients, 0,
+					this.clientExpirationJobDelay.toMillis(), TimeUnit.MILLISECONDS));
 			if (!this.heartbeatInterval.isZero() && !this.heartbeatInterval.isNegative()) {
-				this.taskScheduler.scheduleWithFixedDelay(this::sendHeartbeat, this.heartbeatInterval.toMillis(),
-						this.heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS);
+				ignoreFuture(scheduler.scheduleWithFixedDelay(this::sendHeartbeat, this.heartbeatInterval.toMillis(),
+						this.heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS));
 			}
-			if (this.replayEnabled && !this.replayCleanupJobDelay.isZero() && !this.replayCleanupJobDelay.isNegative()) {
-				this.taskScheduler.scheduleWithFixedDelay(this::purgeExpiredReplayEvents,
+			if (this.replayEnabled && !this.replayCleanupJobDelay.isZero()
+					&& !this.replayCleanupJobDelay.isNegative()) {
+				ignoreFuture(scheduler.scheduleWithFixedDelay(this::purgeExpiredReplayEvents,
 						this.replayCleanupJobDelay.toMillis(), this.replayCleanupJobDelay.toMillis(),
-						TimeUnit.MILLISECONDS);
+						TimeUnit.MILLISECONDS));
 			}
 			logger.info("SseEventBus started with " + this.sendWorkerCount + " send worker(s)");
 		}
@@ -167,11 +171,12 @@ public class SseEventBus {
 
 	@PreDestroy
 	public void cleanUp() {
-		if (this.schedulerEnabled) {
+		@Nullable ScheduledExecutorService scheduler = this.taskScheduler;
+		if (scheduler != null) {
 			logger.info("SseEventBus shutting down");
-			this.taskScheduler.shutdownNow();
+			scheduler.shutdownNow();
 			try {
-				this.taskScheduler.awaitTermination(5, TimeUnit.SECONDS);
+				scheduler.awaitTermination(5, TimeUnit.SECONDS);
 			}
 			catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
@@ -212,7 +217,7 @@ public class SseEventBus {
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
-	public SseEmitter createSseEmitter(String clientId, String... events) {
+	public SseEmitter createSseEmitter(String clientId, String @Nullable ... events) {
 		return createSseEmitter(clientId, 180_000L, false, false, events);
 	}
 
@@ -225,7 +230,7 @@ public class SseEventBus {
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
-	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe, String... events) {
+	public SseEmitter createSseEmitter(String clientId, boolean unsubscribe, String @Nullable ... events) {
 		return createSseEmitter(clientId, 180_000L, unsubscribe, false, events);
 	}
 
@@ -237,7 +242,7 @@ public class SseEventBus {
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
-	public SseEmitter createSseEmitter(String clientId, Long timeout, String... events) {
+	public SseEmitter createSseEmitter(String clientId, Long timeout, String @Nullable ... events) {
 		return createSseEmitter(clientId, timeout, false, false, events);
 	}
 
@@ -251,7 +256,7 @@ public class SseEventBus {
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
-	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe, String... events) {
+	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe, String @Nullable ... events) {
 		return createSseEmitter(clientId, timeout, unsubscribe, false, events);
 	}
 
@@ -268,7 +273,7 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createSseEmitter(String clientId, Long timeout, boolean unsubscribe, boolean completeAfterMessage,
-			String... events) {
+			String @Nullable ... events) {
 		SseEmitter emitter = new SseEmitter(timeout);
 		emitter.onTimeout(emitter::complete);
 		registerClient(clientId, emitter, completeAfterMessage);
@@ -299,7 +304,7 @@ public class SseEventBus {
 	 * @return a new SseEmitter instance
 	 */
 	public SseEmitter createReplayableSseEmitter(String clientId, Long timeout, boolean unsubscribe,
-			boolean completeAfterMessage, String lastEventId, String... events) {
+			boolean completeAfterMessage, @Nullable String lastEventId, String @Nullable ... events) {
 		SseEmitter emitter = createSseEmitter(clientId, timeout, unsubscribe, completeAfterMessage, events);
 		replayMissedEvents(clientId, lastEventId);
 		return emitter;
@@ -313,7 +318,8 @@ public class SseEventBus {
 	 * @param events events the client wants to subscribe
 	 * @return a new SseEmitter instance
 	 */
-	public SseEmitter createReplayableSseEmitter(String clientId, String lastEventId, String... events) {
+	public SseEmitter createReplayableSseEmitter(String clientId, @Nullable String lastEventId,
+			String @Nullable ... events) {
 		return createReplayableSseEmitter(clientId, 180_000L, false, false, lastEventId, events);
 	}
 
@@ -344,9 +350,11 @@ public class SseEventBus {
 			existing.updateCompleteAfterMessage(completeAfterMessage);
 			existing.updateLastTransfer();
 			return existing;
-		});		if (this.replayEnabled) {
+		});
+		if (this.replayEnabled) {
 			this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
-		}		if (oldEmitter.get() != null) {
+		}
+		if (oldEmitter.get() != null) {
 			try {
 				oldEmitter.get().complete();
 			}
@@ -371,7 +379,7 @@ public class SseEventBus {
 	 * @param lastEventId last event id received by the reconnecting client
 	 */
 	public void registerClient(String clientId, SseEmitter emitter, boolean completeAfterMessage,
-			String lastEventId) {
+			@Nullable String lastEventId) {
 		registerClient(clientId, emitter, completeAfterMessage);
 		replayMissedEvents(clientId, lastEventId);
 	}
@@ -446,8 +454,8 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 * @param keepEvents events the client should stay subscribed to
 	 */
-	public void unsubscribeFromAllEvents(String clientId, String... keepEvents) {
-		Set<String> keepEventsSet = null;
+	public void unsubscribeFromAllEvents(String clientId, String @Nullable ... keepEvents) {
+		@Nullable Set<String> keepEventsSet = null;
 		if (keepEvents != null && keepEvents.length > 0) {
 			keepEventsSet = new HashSet<>();
 			Collections.addAll(keepEventsSet, keepEvents);
@@ -469,7 +477,7 @@ public class SseEventBus {
 	public void handleEvent(SseEvent event) {
 		try {
 
-			String convertedValue = null;
+			@Nullable String convertedValue = null;
 			boolean converted = event.data() instanceof String;
 
 			if (event.clientIds().isEmpty()) {
@@ -479,7 +487,7 @@ public class SseEventBus {
 					if (!excludes.isEmpty() && excludes.contains(subscriberId)) {
 						continue;
 					}
-					Client client = this.clients.get(subscriberId);
+					@Nullable Client client = this.clients.get(subscriberId);
 					if (client != null) {
 						if (!converted) {
 							convertedValue = this.convertObject(event);
@@ -507,7 +515,7 @@ public class SseEventBus {
 			}
 			else {
 				for (String clientId : event.clientIds()) {
-					Client client = this.clients.get(clientId);
+					@Nullable Client client = this.clients.get(clientId);
 					if (client != null
 							&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
 						if (!converted) {
@@ -515,8 +523,7 @@ public class SseEventBus {
 							converted = true;
 						}
 						if (this.replayEnabled) {
-							ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId,
-									k -> new ReentrantLock());
+							ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 							lock.lock();
 							try {
 								storeReplayEvent(clientId, event, convertedValue);
@@ -549,7 +556,7 @@ public class SseEventBus {
 		}
 
 		notifyAfterEventQueued(clientEvent, firstAttempt);
-		Exception exception = sendEventToClient(clientEvent);
+		@Nullable Exception exception = sendEventToClient(clientEvent);
 		if (exception == null) {
 			clientEvent.getClient().updateLastTransfer();
 		}
@@ -568,7 +575,7 @@ public class SseEventBus {
 		}
 	}
 
-	private void notifyAfterEventSent(ClientEvent clientEvent, Exception exception) {
+	private void notifyAfterEventSent(ClientEvent clientEvent, @Nullable Exception exception) {
 		try {
 			this.listener.afterEventSent(clientEvent, exception);
 		}
@@ -635,7 +642,7 @@ public class SseEventBus {
 				ClientEvent clientEvent = this.sendQueue.take();
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
 					Client client = clientEvent.getClient();
-					Exception e = sendEventToClient(clientEvent);
+					@Nullable Exception e = sendEventToClient(clientEvent);
 					if (e == null) {
 						client.updateLastTransfer();
 						notifyAfterEventSent(clientEvent, null);
@@ -672,7 +679,7 @@ public class SseEventBus {
 		}
 	}
 
-	private static Exception sendEventToClient(ClientEvent clientEvent) {
+	private static @Nullable Exception sendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
 			client.sseEmitter().send(clientEvent.createSseEventBuilder());
@@ -687,7 +694,7 @@ public class SseEventBus {
 
 	}
 
-	private String convertObject(SseEvent event) {
+	private @Nullable String convertObject(SseEvent event) {
 		for (DataObjectConverter converter : this.dataObjectConverters) {
 			if (converter.supports(event)) {
 				try {
@@ -842,12 +849,16 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 * @param lastEventId last event id received by the reconnecting client
 	 */
-	public void replayMissedEvents(String clientId, String lastEventId) {
+	public void replayMissedEvents(String clientId, @Nullable String lastEventId) {
 		if (!this.replayEnabled || lastEventId == null || lastEventId.isEmpty()) {
 			return;
 		}
+		@Nullable ReplayStore replayStore = this.replayStore;
+		if (replayStore == null) {
+			return;
+		}
 
-		Client client = this.clients.get(clientId);
+		@Nullable Client client = this.clients.get(clientId);
 		if (client == null) {
 			return;
 		}
@@ -862,9 +873,8 @@ public class SseEventBus {
 		try {
 			removePendingReplayableEvents(clientId);
 
-			for (ReplayEvent replayEvent : this.replayStore.getEventsSince(clientId, lastEventId)) {
-				if (!this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
-						replayEvent.sseEvent().event())) {
+			for (ReplayEvent replayEvent : replayStore.getEventsSince(clientId, lastEventId)) {
+				if (!this.subscriptionRegistry.isClientSubscribedToEvent(clientId, replayEvent.sseEvent().event())) {
 					continue;
 				}
 				queueOrSend(new ClientEvent(client, replayEvent.sseEvent(), replayEvent.convertedValue()), true);
@@ -891,15 +901,19 @@ public class SseEventBus {
 		}
 	}
 
-	private void storeReplayEvent(String clientId, SseEvent event, String convertedValue) {
+	private void storeReplayEvent(String clientId, SseEvent event, @Nullable String convertedValue) {
 		if (!this.replayEnabled || event.id().isEmpty() || event.id().get().isEmpty()) {
 			return;
 		}
-		this.replayStore.store(new ReplayEvent(clientId, event, resolveReplayValue(event, convertedValue),
+		@Nullable ReplayStore replayStore = this.replayStore;
+		if (replayStore == null) {
+			return;
+		}
+		replayStore.store(new ReplayEvent(clientId, event, resolveReplayValue(event, convertedValue),
 				System.currentTimeMillis()));
 	}
 
-	private static String resolveReplayValue(SseEvent event, String convertedValue) {
+	private static @Nullable String resolveReplayValue(SseEvent event, @Nullable String convertedValue) {
 		if (convertedValue != null) {
 			return convertedValue;
 		}
@@ -907,6 +921,10 @@ public class SseEventBus {
 			return stringData;
 		}
 		return null;
+	}
+
+	private static void ignoreFuture(@SuppressWarnings("unused") Future<?> future) {
+		// Intentionally fire-and-forget. Errors surface via the executor and logs.
 	}
 
 	private void removePendingReplayableEvents(String clientId) {
@@ -920,14 +938,22 @@ public class SseEventBus {
 		if (!this.replayEnabled) {
 			return;
 		}
-		this.replayStore.purgeExpired(System.currentTimeMillis() - this.replayRetention.toMillis());
+		@Nullable ReplayStore replayStore = this.replayStore;
+		if (replayStore == null) {
+			return;
+		}
+		replayStore.purgeExpired(System.currentTimeMillis() - this.replayRetention.toMillis());
 	}
 
 	private void clearReplayEvents(String clientId) {
 		if (!this.replayEnabled) {
 			return;
 		}
-		this.replayStore.clearClient(clientId);
+		@Nullable ReplayStore replayStore = this.replayStore;
+		if (replayStore == null) {
+			return;
+		}
+		replayStore.clearClient(clientId);
 	}
 
 }

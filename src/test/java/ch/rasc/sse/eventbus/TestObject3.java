@@ -15,20 +15,22 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.jspecify.annotations.Nullable;
+
 import com.fasterxml.jackson.annotation.JsonView;
 
 public class TestObject3 {
 
 	@JsonView(JsonViews.PUBLIC.class)
-	private String uuid;
+	private @Nullable String uuid;
 
 	@JsonView(JsonViews.PUBLIC.class)
-	private String publicInfo;
+	private @Nullable String publicInfo;
 
 	@JsonView(JsonViews.PRIVATE.class)
 	private int privateData;
 
-	public String getUuid() {
+	public @Nullable String getUuid() {
 		return this.uuid;
 	}
 
@@ -36,7 +38,7 @@ public class TestObject3 {
 		this.uuid = uuid;
 	}
 
-	public String getPublicInfo() {
+	public @Nullable String getPublicInfo() {
 		return this.publicInfo;
 	}
 

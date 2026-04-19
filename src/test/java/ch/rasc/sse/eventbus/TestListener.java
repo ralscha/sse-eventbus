@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -46,7 +47,7 @@ public class TestListener implements SseEventBusListener {
 	}
 
 	@Override
-	public void afterEventSent(ClientEvent clientEvent, Exception exception) {
+	public void afterEventSent(ClientEvent clientEvent, @Nullable Exception exception) {
 		if (exception == null) {
 			this.afterEventSentOk.add(clientEvent);
 		}

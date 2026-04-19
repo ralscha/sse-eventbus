@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.jspecify.annotations.Nullable;
+
 public class DefaultDataObjectConverter implements DataObjectConverter {
 
 	@Override
@@ -23,7 +25,7 @@ public class DefaultDataObjectConverter implements DataObjectConverter {
 	}
 
 	@Override
-	public String convert(SseEvent event) {
+	public @Nullable String convert(SseEvent event) {
 		if (event.data() != null) {
 			return event.data().toString();
 		}

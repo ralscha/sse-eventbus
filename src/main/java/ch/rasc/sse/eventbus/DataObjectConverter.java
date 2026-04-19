@@ -15,10 +15,12 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.jspecify.annotations.Nullable;
+
 public interface DataObjectConverter {
 
 	boolean supports(SseEvent event);
 
-	String convert(SseEvent event);
+	@Nullable String convert(SseEvent event);
 
 }
