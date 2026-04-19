@@ -190,6 +190,11 @@ Unless an API element is annotated with `@Nullable`, values should be treated as
 
 Build-time nullness checking is enforced with Error Prone and the NullAway plugin.
 
+The stricter Error Prone and NullAway checks are enabled automatically when Maven
+runs on JDK 21 or newer. Builds running on JDK 17 still compile and test normally,
+but without the Error Prone plugin, because recent Error Prone releases require a
+newer runtime than Java 17.
+
 Nullable contracts are declared explicitly for cases such as:
 
 * `SseEvent.data()` and factory methods that allow events without data

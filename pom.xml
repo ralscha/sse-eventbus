@@ -197,27 +197,11 @@
           <target>17</target>
           <release>17</release>
           <parameters>true</parameters>
-          <compilerArgs>
-            <arg>-XDcompilePolicy=simple</arg>
-            <arg>--should-stop=ifError=FLOW</arg>
-            <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
-            <arg>-Xplugin:ErrorProne -Xep:NullAway:ERROR -Xep:FutureReturnValueIgnored:ERROR -Xep:StringSplitter:ERROR -Xep:CanonicalDuration:ERROR -Xep:InvalidLink:ERROR -Xep:UnrecognisedJavadocTag:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:JSpecifyMode=true -XepOpt:NullAway:ExcludedClassAnnotations=org.immutables.value.Generated,javax.annotation.processing.Generated -XepExcludedPaths:.*/target/generated-sources/annotations/.*</arg>
-          </compilerArgs>
           <annotationProcessorPaths>
             <path>
               <groupId>org.immutables</groupId>
               <artifactId>value</artifactId>
               <version>2.12.1</version>
-            </path>
-            <path>
-              <groupId>com.google.errorprone</groupId>
-              <artifactId>error_prone_core</artifactId>
-              <version>2.49.0</version>
-            </path>
-            <path>
-              <groupId>com.uber.nullaway</groupId>
-              <artifactId>nullaway</artifactId>
-              <version>0.13.2</version>
             </path>
           </annotationProcessorPaths>
         </configuration>
@@ -323,5 +307,42 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>error-prone</id>
+      <activation>
+        <jdk>[21,)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <compilerArgs combine.children="append">
+                <arg>-XDcompilePolicy=simple</arg>
+                <arg>--should-stop=ifError=FLOW</arg>
+                <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
+                <arg>-Xplugin:ErrorProne -Xep:NullAway:ERROR -Xep:FutureReturnValueIgnored:ERROR -Xep:StringSplitter:ERROR -Xep:CanonicalDuration:ERROR -Xep:InvalidLink:ERROR -Xep:UnrecognisedJavadocTag:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:JSpecifyMode=true -XepOpt:NullAway:ExcludedClassAnnotations=org.immutables.value.Generated,javax.annotation.processing.Generated -XepExcludedPaths:.*/target/generated-sources/annotations/.*</arg>
+              </compilerArgs>
+              <annotationProcessorPaths combine.children="append">
+                <path>
+                  <groupId>com.google.errorprone</groupId>
+                  <artifactId>error_prone_core</artifactId>
+                  <version>2.49.0</version>
+                </path>
+                <path>
+                  <groupId>com.uber.nullaway</groupId>
+                  <artifactId>nullaway</artifactId>
+                  <version>0.13.2</version>
+                </path>
+              </annotationProcessorPaths>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>
