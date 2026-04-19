@@ -115,6 +115,27 @@ Notes:
 * Events without `id(...)` are delivered live only and are never replayed.
 * Retained events older than `replayRetention()` are removed by the replay cleanup job.
 
+### Heartbeats
+
+Heartbeat comments are disabled by default. To keep idle SSE connections alive through proxies or load balancers, override `heartbeatInterval()` and optionally customize the emitted comment text with `heartbeatComment()`.
+
+```
+@SpringBootApplication
+@EnableSseEventBus
+public class Application implements SseEventBusConfigurer {
+
+  @Override
+  public Duration heartbeatInterval() {
+    return Duration.ofSeconds(30);
+  }
+
+  @Override
+  public String heartbeatComment() {
+    return "keep-alive";
+  }
+}
+```
+
 ### Setup client
 
 On the client side an application interacts with the [EventSource](https://developer.mozilla.org/en/docs/Web/API/EventSource) object.

@@ -96,6 +96,8 @@
       <scope>provided</scope>
     </dependency>
 
+    <!-- TEST dependencies -->
+
     <dependency>
       <groupId>com.launchdarkly</groupId>
       <artifactId>okhttp-eventsource</artifactId>
@@ -110,7 +112,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- TEST dependencies -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

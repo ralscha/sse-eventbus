@@ -140,6 +140,15 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
+	 * Comment text sent with heartbeat (keep-alive) messages.
+	 * <p>
+	 * Default: {@code "heartbeat"}
+	 */
+	default String heartbeatComment() {
+		return "heartbeat";
+	}
+
+	/**
 	 * Optional store for replaying events after reconnect.
 	 * <p>
 	 * Default: disabled

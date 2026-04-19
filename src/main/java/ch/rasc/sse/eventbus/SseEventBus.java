@@ -88,6 +88,8 @@ public class SseEventBus {
 
 	private final Duration heartbeatInterval;
 
+	private final String heartbeatComment;
+
 	private final Duration replayRetention;
 
 	private final Duration replayCleanupJobDelay;
@@ -157,6 +159,7 @@ public class SseEventBus {
 		this.schedulerDelay = configurer.schedulerDelay();
 		this.clientExpirationJobDelay = configurer.clientExpirationJobDelay();
 		this.heartbeatInterval = configurer.heartbeatInterval();
+		this.heartbeatComment = configurer.heartbeatComment();
 		this.replayStore = replayStore;
 		this.replayEnabled = replayStore != null;
 		this.replayRetention = configurer.replayRetention();
@@ -1028,7 +1031,7 @@ public class SseEventBus {
 	private void sendHeartbeat() {
 		for (Client client : this.clients.values()) {
 			try {
-				client.sseEmitter().send(SseEmitter.event().comment("heartbeat"));
+				client.sseEmitter().send(SseEmitter.event().comment(this.heartbeatComment));
 				client.updateLastTransfer();
 			}
 			catch (java.io.IOException | RuntimeException e) {
