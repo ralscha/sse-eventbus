@@ -15,8 +15,9 @@
  */
 package ch.rasc.sse.eventbus.observation;
 
-import io.micrometer.observation.Observation;
 import org.jspecify.annotations.Nullable;
+
+import io.micrometer.observation.Observation;
 
 /**
  * Observation context emitted by {@code SseEventBus} operations.

@@ -32,8 +32,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
-import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationRegistry;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jspecify.annotations.Nullable;
@@ -45,6 +43,8 @@ import ch.rasc.sse.eventbus.observation.DefaultSseEventBusObservationConvention;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext.Operation;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 

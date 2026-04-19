@@ -20,9 +20,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 
-import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationHandler;
-import io.micrometer.observation.ObservationRegistry;
 import static org.assertj.core.api.Assertions.assertThat;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +39,9 @@ import ch.rasc.sse.eventbus.config.EnableSseEventBus;
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext.Operation;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
 
 @ContextConfiguration
 @DirtiesContext

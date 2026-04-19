@@ -18,7 +18,6 @@ package ch.rasc.sse.eventbus.config;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.micrometer.observation.ObservationRegistry;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +31,7 @@ import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SseEventBus;
 import ch.rasc.sse.eventbus.SubscriptionRegistry;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
+import io.micrometer.observation.ObservationRegistry;
 import tools.jackson.databind.ObjectMapper;
 
 /**
