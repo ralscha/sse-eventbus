@@ -26,6 +26,7 @@ import org.springframework.context.annotation.Configuration;
 import ch.rasc.sse.eventbus.DataObjectConverter;
 import ch.rasc.sse.eventbus.DefaultDataObjectConverter;
 import ch.rasc.sse.eventbus.DefaultSubscriptionRegistry;
+import ch.rasc.sse.eventbus.DistributedEventBus;
 import ch.rasc.sse.eventbus.JacksonDataObjectConverter;
 import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SseEventBus;
@@ -67,6 +68,9 @@ public class DefaultSseEventBusConfiguration {
 	@Autowired(required = false)
 	protected @Nullable SseEventBusObservationConvention observationConvention;
 
+	@Autowired(required = false)
+	protected @Nullable DistributedEventBus distributedEventBus;
+
 	@Bean
 	public SseEventBus eventBus() {
 		@Nullable SseEventBusConfigurer config = this.configurer;
@@ -98,7 +102,7 @@ public class DefaultSseEventBusConfiguration {
 		}
 
 		return new SseEventBus(config, registry, converters, store, this.observationRegistry,
-				this.observationConvention);
+				this.observationConvention, this.distributedEventBus);
 	}
 
 }

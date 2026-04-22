@@ -106,6 +106,8 @@ public class SseEventBus {
 
 	private final SseEventBusObservationConvention observationConvention;
 
+	private final @Nullable DistributedEventBus distributedEventBus;
+
 	/**
 	 * Per-client locks used to make {@link #storeReplayEvent} + {@link #queueOrSend}
 	 * atomic with respect to {@link #replayMissedEvents}, preventing duplicate or
@@ -123,7 +125,7 @@ public class SseEventBus {
 	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
 			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore) {
 		this(configurer, subscriptionRegistry, dataObjectConverters, replayStore, ObservationRegistry.NOOP,
-				DEFAULT_OBSERVATION_CONVENTION);
+				DEFAULT_OBSERVATION_CONVENTION, null);
 	}
 
 	/**
@@ -140,6 +142,27 @@ public class SseEventBus {
 			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore,
 			@Nullable ObservationRegistry observationRegistry,
 			@Nullable SseEventBusObservationConvention observationConvention) {
+		this(configurer, subscriptionRegistry, dataObjectConverters, replayStore, observationRegistry,
+				observationConvention, null);
+	}
+
+	/**
+	 * Creates a new instance of the SseEventBus with optional distributed event delivery.
+	 * @param configurer The configurer to use for this instance.
+	 * @param subscriptionRegistry The subscription registry to use for this instance.
+	 * @param dataObjectConverters The list of data object converters.
+	 * @param replayStore The replay store to use for this instance.
+	 * @param observationRegistry The Micrometer observation registry.
+	 * @param observationConvention The observation convention used for emitted
+	 * observations.
+	 * @param distributedEventBus The optional distributed event bus transport. When
+	 * non-null, events are forwarded to other nodes after local delivery.
+	 */
+	public SseEventBus(SseEventBusConfigurer configurer, SubscriptionRegistry subscriptionRegistry,
+			@Nullable List<DataObjectConverter> dataObjectConverters, @Nullable ReplayStore replayStore,
+			@Nullable ObservationRegistry observationRegistry,
+			@Nullable SseEventBusObservationConvention observationConvention,
+			@Nullable DistributedEventBus distributedEventBus) {
 
 		this.subscriptionRegistry = subscriptionRegistry;
 
@@ -170,6 +193,8 @@ public class SseEventBus {
 
 		this.dataObjectConverters = dataObjectConverters != null
 				? Collections.unmodifiableList(new ArrayList<>(dataObjectConverters)) : List.of();
+
+		this.distributedEventBus = distributedEventBus;
 	}
 
 	/**
@@ -178,6 +203,9 @@ public class SseEventBus {
 	 */
 	@PostConstruct
 	public void init() {
+		if (this.distributedEventBus != null) {
+			this.distributedEventBus.setRemoteEventConsumer(this::handleRemoteEvent);
+		}
 		@Nullable ScheduledExecutorService scheduler = this.taskScheduler;
 		if (scheduler != null) {
 			for (int worker = 0; worker < this.sendWorkerCount; worker++) {
@@ -541,11 +569,62 @@ public class SseEventBus {
 
 	/**
 	 * Handles a {@link SseEvent} and sends it to the appropriate clients.
+	 * <p>
+	 * When a {@link DistributedEventBus} is configured, the event is also forwarded to
+	 * other nodes after local delivery.
 	 * @param event the event to handle
 	 */
 	@EventListener
 	public void handleEvent(SseEvent event) {
-		SseEventBusObservationContext observationContext = createObservationContext(Operation.HANDLE_EVENT);
+		try {
+			handleLocalEvent(event);
+		}
+		finally {
+			@Nullable DistributedEventBus transport = this.distributedEventBus;
+			if (transport != null) {
+				SseEventBusObservationContext remoteCtx = createObservationContext(Operation.PUBLISH_REMOTE);
+				remoteCtx.setEventName(event.event());
+				Observation remoteObs = startObservation(remoteCtx);
+				try (Observation.Scope ignored = remoteObs.openScope()) {
+					transport.publishRemote(event);
+					useObservationScope(ignored);
+					remoteCtx.setOutcome("success");
+				}
+				catch (RuntimeException ex) {
+					remoteCtx.setOutcome("error");
+					remoteObs.error(ex);
+					logger.error("publishRemote failed", ex);
+				}
+				finally {
+					remoteObs.stop();
+				}
+			}
+		}
+	}
+
+	/**
+	 * Delivers a {@link SseEvent} to local subscribers without forwarding it to remote
+	 * nodes. Called for locally originated events (via {@link #handleEvent}).
+	 * @param event the event to deliver locally
+	 */
+	void handleLocalEvent(SseEvent event) {
+		doHandleLocalEvent(event, Operation.HANDLE_EVENT);
+	}
+
+	/**
+	 * Delivers a {@link SseEvent} to local subscribers without forwarding it to remote
+	 * nodes. Called by the {@link DistributedEventBus} consumer for events received from
+	 * other nodes. Emits a {@link Operation#RECEIVE_REMOTE} observation so that remote
+	 * inbound delivery can be distinguished from locally originated delivery in metrics
+	 * and traces.
+	 * @param event the event to deliver locally
+	 */
+	private void handleRemoteEvent(SseEvent event) {
+		doHandleLocalEvent(event, Operation.RECEIVE_REMOTE);
+	}
+
+	private void doHandleLocalEvent(SseEvent event, Operation operation) {
+		SseEventBusObservationContext observationContext = createObservationContext(operation);
 		observationContext.setEventName(event.event());
 		observationContext.setDirectEvent(!event.clientIds().isEmpty());
 		observationContext.setReplay(this.replayEnabled && event.id().isPresent());
@@ -628,7 +707,7 @@ public class SseEventBus {
 		catch (InterruptedException e) {
 			observationContext.setOutcome("error");
 			observation.error(e);
-			logger.error("handleEvent failed", e);
+			logger.error("event delivery interrupted", e);
 			Thread.currentThread().interrupt();
 		}
 		catch (RuntimeException ex) {

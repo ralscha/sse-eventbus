@@ -1,6 +1,7 @@
 # Changelog
 
-## 3.1.1 - TBD
+## 3.2.0 - April 22, 2026
+* New distributed event bus for cross-node SSE event delivery (`DistributedSseEventBus')
 * Add JSpecify null-safety annotations with package-level `@NullMarked` defaults for the public API and configuration hooks
 * Add Error Prone with NullAway to enforce nullness contracts during compilation
 * Add Micrometer Observation instrumentation for client lifecycle, event delivery, and replay flows

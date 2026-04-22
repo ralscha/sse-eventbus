@@ -30,7 +30,7 @@ import org.jspecify.annotations.Nullable;
  */
 @Value.Style(depluralize = true, visibility = ImplementationVisibility.PACKAGE, overshadowImplementation = true)
 @Value.Immutable
-public interface SseEvent {
+public interface SseEvent extends java.io.Serializable {
 
 	/**
 	 * The default event name.

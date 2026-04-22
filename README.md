@@ -265,6 +265,9 @@ class ObservabilityConfiguration {
 Simple demo application:    
 https://github.com/ralscha/sse-eventbus-demo
 
+Distributed demo application:    
+https://github.com/ralscha/sse-eventbus-demo-distributed
+
 Ionic Demo Chat application:    
 https://github.com/ralscha/sse-eventbus-demo-chat
 

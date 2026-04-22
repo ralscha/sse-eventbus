@@ -37,7 +37,11 @@ public class SseEventBusObservationContext extends Observation.Context {
 
 		SEND_EVENT("send"),
 
-		REPLAY_EVENTS("replay");
+		REPLAY_EVENTS("replay"),
+
+		PUBLISH_REMOTE("publish_remote"),
+
+		RECEIVE_REMOTE("receive_remote");
 
 		private final String value;
 
