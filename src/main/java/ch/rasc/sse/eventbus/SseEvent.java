@@ -99,7 +99,7 @@ public interface SseEvent extends java.io.Serializable {
 	 * @return a new SseEvent instance
 	 */
 	static SseEvent ofData(@Nullable Object data) {
-		return SseEvent.builder().data(data).build();
+		return builder().data(data).build();
 	}
 
 	/**
@@ -108,7 +108,7 @@ public interface SseEvent extends java.io.Serializable {
 	 * @return a new SseEvent instance
 	 */
 	static SseEvent ofEvent(String event) {
-		return SseEvent.builder().event(event).data("").build();
+		return builder().event(event).data("").build();
 	}
 
 	/**
@@ -119,7 +119,7 @@ public interface SseEvent extends java.io.Serializable {
 	 * @return a new SseEvent instance
 	 */
 	static SseEvent of(String event, @Nullable Object data) {
-		return SseEvent.builder().event(event).data(data).build();
+		return builder().event(event).data(data).build();
 	}
 
 	/**

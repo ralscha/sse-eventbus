@@ -38,7 +38,6 @@ import ch.rasc.sse.eventbus.SseTestClientSupport.ResponseData;
 import ch.rasc.sse.eventbus.SseTestClientSupport.SseResponse;
 import static ch.rasc.sse.eventbus.TestUtils.sleep;
 
-@SuppressWarnings("resource")
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, classes = TestDefaultConfiguration.class)
 public class IntegrationTest {
 
@@ -503,7 +502,7 @@ public class IntegrationTest {
 	}
 
 	@Test
-	public void testMany() throws IOException {
+	public void testMany() {
 		List<SseResponse<ResponseData>> responses = new ArrayList<>();
 		for (int i = 0; i < 120; i++) {
 			responses.add(registerAndSubscribe(String.valueOf(i), "eventName", 1));

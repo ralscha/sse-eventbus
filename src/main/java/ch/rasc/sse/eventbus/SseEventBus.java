@@ -1149,7 +1149,7 @@ public class SseEventBus {
 		// Scope must stay open for nested observations and context propagation.
 	}
 
-	private SseEventBusObservationContext createObservationContext(Operation operation) {
+	private static SseEventBusObservationContext createObservationContext(Operation operation) {
 		return new SseEventBusObservationContext(operation);
 	}
 
