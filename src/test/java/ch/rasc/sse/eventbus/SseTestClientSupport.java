@@ -36,6 +36,8 @@ import com.launchdarkly.eventsource.background.BackgroundEventSource;
 import static ch.rasc.sse.eventbus.TestUtils.sleep;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
 final class SseTestClientSupport {
 
@@ -54,6 +56,17 @@ final class SseTestClientSupport {
 
 	static <T> SseResponse<T> open(String url, int expectedNoOfData, @Nullable String lastEventId,
 			BiFunction<String, MessageEvent, T> mapper) {
+		return open(url, expectedNoOfData, lastEventId, mapper, true);
+	}
+
+	static <T> SseResponse<T> openAsync(String url, int expectedNoOfData, @Nullable String lastEventId,
+			BiFunction<String, MessageEvent, T> mapper) {
+		return open(url, expectedNoOfData, lastEventId, mapper, false);
+	}
+
+	private static <T> SseResponse<T> open(String url, int expectedNoOfData, @Nullable String lastEventId,
+			BiFunction<String, MessageEvent, T> mapper, boolean awaitOpen) {
+		CompletableFuture<Void> openFuture = new CompletableFuture<>();
 		CompletableFuture<List<T>> dataFuture = new CompletableFuture<>();
 		List<T> responses = new ArrayList<>();
 
@@ -63,16 +76,36 @@ final class SseTestClientSupport {
 			builder.lastEventId(lastEventId);
 		}
 
-		BackgroundEventHandler handler = (DefaultEventHandler) (event, messageEvent) -> {
-			responses.add(mapper.apply(event, messageEvent));
-			if (responses.size() == expectedNoOfData) {
-				dataFuture.complete(responses);
+		BackgroundEventHandler handler = new DefaultEventHandler() {
+			@Override
+			public void onOpen() {
+				openFuture.complete(null);
+			}
+
+			@Override
+			public void onMessage(String event, MessageEvent messageEvent) {
+				responses.add(mapper.apply(event, messageEvent));
+				if (responses.size() == expectedNoOfData) {
+					dataFuture.complete(List.copyOf(responses));
+				}
 			}
 		};
 
 		BackgroundEventSource eventSource = new BackgroundEventSource.Builder(handler, builder).build();
 		eventSource.start();
+		if (awaitOpen) {
+			await().atMost(CONNECTION_TIMEOUT).until(openFuture::isDone);
+		}
 		return new SseResponse<>(eventSource, dataFuture);
+	}
+
+	static void simulateClientDisconnect(SseEventBus eventBus, String clientId) {
+		eventBus.registerClient(clientId, new SseEmitter() {
+			@Override
+			public void send(SseEventBuilder builder) throws IOException {
+				throw new IOException("simulated disconnected client");
+			}
+		});
 	}
 
 	static void awaitClientRegistered(SseEventBus eventBus, String clientId) {

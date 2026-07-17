@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.io.IOException;
+
 import org.springframework.stereotype.Controller;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,27 +41,39 @@ public class TestController {
 			SseEmitter emitter = new SseEmitter(3_000L);
 			emitter.onTimeout(emitter::complete);
 			this.eventBus.registerClient(id, emitter, false, lastEventId);
-			return emitter;
+			return initialize(emitter);
 		}
-		return this.eventBus.createSseEmitter(id, 3_000L);
+		return initialize(this.eventBus.createSseEmitter(id, 3_000L));
 	}
 
 	@GetMapping("/register/{id}/{event}")
 	public SseEmitter eventbus(@PathVariable("id") String id, @PathVariable("event") String event,
 			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
 		if (lastEventId != null && !lastEventId.isEmpty()) {
-			return this.eventBus.createReplayableSseEmitter(id, 30_000L, false, false, lastEventId, event.split(","));
+			return initialize(
+					this.eventBus.createReplayableSseEmitter(id, 30_000L, false, false, lastEventId, event.split(",")));
 		}
-		return this.eventBus.createSseEmitter(id, 30_000L, event.split(","));
+		return initialize(this.eventBus.createSseEmitter(id, 30_000L, event.split(",")));
 	}
 
 	@GetMapping("/registerOnly/{id}/{event}")
 	public SseEmitter eventbusOnly(@PathVariable("id") String id, @PathVariable("event") String event,
 			@RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
 		if (lastEventId != null && !lastEventId.isEmpty()) {
-			return this.eventBus.createReplayableSseEmitter(id, 3_000L, true, false, lastEventId, event.split(","));
+			return initialize(
+					this.eventBus.createReplayableSseEmitter(id, 3_000L, true, false, lastEventId, event.split(",")));
 		}
-		return this.eventBus.createSseEmitter(id, 3_000L, true, event.split(","));
+		return initialize(this.eventBus.createSseEmitter(id, 3_000L, true, event.split(",")));
+	}
+
+	private static SseEmitter initialize(SseEmitter emitter) {
+		try {
+			emitter.send(SseEmitter.event().comment("connected"));
+		}
+		catch (IOException e) {
+			throw new IllegalStateException("Failed to initialize SSE test connection", e);
+		}
+		return emitter;
 	}
 
 	@ResponseBody

@@ -125,9 +125,8 @@ public class ListenerTest {
 	@Test
 	public void testReconnect() throws IOException {
 		var sseResponse = registerSubscribe("1", "eventName", 3);
-		sleep(200, TimeUnit.MILLISECONDS);
 		sseResponse.eventSource().close();
-		sleep(3, TimeUnit.SECONDS);
+		SseTestClientSupport.simulateClientDisconnect(this.eventBus, "1");
 
 		SseEvent sseEvent = SseEvent.builder().event("eventName").data("payload1").build();
 		this.eventBus.handleEvent(sseEvent);

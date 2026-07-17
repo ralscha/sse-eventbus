@@ -53,6 +53,9 @@ public class IntegrationTest {
 	@Autowired
 	private ReplayStore replayStore;
 
+	@Autowired
+	private TestListener testListener;
+
 	@BeforeEach
 	public void cleanup() {
 		for (String clientId : this.eventBus.getAllClientIds()) {
@@ -66,6 +69,7 @@ public class IntegrationTest {
 				assertThat(this.eventBus.getAllClientIds()).isEmpty();
 			});
 		}
+		this.testListener.reset();
 	}
 
 	@Test
@@ -246,7 +250,7 @@ public class IntegrationTest {
 	@Test
 	public void testTwoClientsTwoDirectEventToOneOfThem() throws IOException {
 		SseResponse<ResponseData> sseResponse1 = registerSubscribe("1", "eventName");
-		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName");
+		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName", 2);
 
 		SseEvent sseEvent = SseEvent.builder().addClientId("2").event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -265,8 +269,8 @@ public class IntegrationTest {
 	@Test
 	public void testThreeClientsGroupEventToTwoOfThem() throws IOException {
 		SseResponse<ResponseData> sseResponse1 = registerSubscribe("1", "eventName");
-		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName");
-		SseResponse<ResponseData> sseResponse3 = registerSubscribe("3", "eventName");
+		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName", 2);
+		SseResponse<ResponseData> sseResponse3 = registerSubscribe("3", "eventName", 2);
 
 		SseEvent sseEvent = SseEvent.builder().addClientIds("2", "3").event("eventName").data("payload1").build();
 		this.eventPublisher.publishEvent(sseEvent);
@@ -286,8 +290,8 @@ public class IntegrationTest {
 	@Test
 	public void testThreeClientsGroupEventToTwoOfThemIgnoreExclude() throws IOException {
 		SseResponse<ResponseData> sseResponse1 = registerSubscribe("1", "eventName");
-		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName");
-		SseResponse<ResponseData> sseResponse3 = registerSubscribe("3", "eventName");
+		SseResponse<ResponseData> sseResponse2 = registerSubscribe("2", "eventName", 2);
+		SseResponse<ResponseData> sseResponse3 = registerSubscribe("3", "eventName", 2);
 
 		SseEvent sseEvent = SseEvent.builder()
 			.addClientIds("2", "3")
@@ -376,9 +380,8 @@ public class IntegrationTest {
 	@Test
 	public void testReconnect() throws IOException {
 		SseResponse<ResponseData> sseResponse = registerSubscribe("1", "eventName");
-		sleep(200, TimeUnit.MILLISECONDS);
 		sseResponse.eventSource().close();
-		sleep(3, TimeUnit.SECONDS);
+		SseTestClientSupport.simulateClientDisconnect(this.eventBus, "1");
 
 		assertThat(this.eventBus.getAllClientIds()).hasSize(1);
 		assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
@@ -394,7 +397,8 @@ public class IntegrationTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
-		sleep(500, TimeUnit.MILLISECONDS);
+		await().atMost(Duration.ofSeconds(5))
+			.until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
@@ -504,39 +508,42 @@ public class IntegrationTest {
 	@Test
 	public void testMany() {
 		List<SseResponse<ResponseData>> responses = new ArrayList<>();
-		for (int i = 0; i < 120; i++) {
-			responses.add(registerAndSubscribe(String.valueOf(i), "eventName", 1));
-		}
-
-		await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-			assertThat(this.eventBus.getAllClientIds()).hasSize(120);
-			assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
-			assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
-			assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
-			assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
-			assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
-		});
-
-		this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
-		for (int i = 0; i < 100; i++) {
-			assertSseResponse(responses.get(i), new ResponseData("eventName", "payload"));
-		}
-
-		for (SseResponse<ResponseData> response : responses) {
-			response.eventSource().close();
-		}
-
-		await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
-			for (String clientId : this.eventBus.getAllClientIds()) {
-				this.eventBus.unregisterClient(clientId);
+		try {
+			for (int i = 0; i < 120; i++) {
+				responses.add(registerAndSubscribeAsync(String.valueOf(i), "eventName", 1));
 			}
-			assertThat(this.eventBus.getAllClientIds()).hasSize(0);
-			assertThat(this.eventBus.getAllEvents()).isEmpty();
-			assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
-			assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
-			assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
-			assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
-		});
+
+			await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+				assertThat(this.eventBus.getAllClientIds()).hasSize(120);
+				assertThat(this.eventBus.getAllEvents()).containsOnly("eventName");
+				assertThat(this.eventBus.hasSubscribers("eventName")).isTrue();
+				assertThat(this.eventBus.getSubscribers("eventName")).hasSize(120);
+				assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(120);
+				assertThat(this.eventBus.getAllSubscriptions()).containsOnlyKeys("eventName");
+			});
+
+			this.eventPublisher.publishEvent(SseEvent.of("eventName", "payload"));
+			for (int i = 0; i < 100; i++) {
+				assertSseResponse(responses.get(i), new ResponseData("eventName", "payload"));
+			}
+		}
+		finally {
+			for (SseResponse<ResponseData> response : responses) {
+				response.eventSource().close();
+			}
+
+			await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+				for (String clientId : this.eventBus.getAllClientIds()) {
+					this.eventBus.unregisterClient(clientId);
+				}
+				assertThat(this.eventBus.getAllClientIds()).hasSize(0);
+				assertThat(this.eventBus.getAllEvents()).isEmpty();
+				assertThat(this.eventBus.hasSubscribers("eventName")).isFalse();
+				assertThat(this.eventBus.getSubscribers("eventName")).isEmpty();
+				assertThat(this.eventBus.countSubscribers("eventName")).isEqualTo(0);
+				assertThat(this.eventBus.getAllSubscriptions()).isEmpty();
+			});
+		}
 	}
 
 	@Test
@@ -680,11 +687,21 @@ public class IntegrationTest {
 		return registerAndSubscribe(clientId, eventName, expectedNoOfData, null);
 	}
 
+	private SseResponse<ResponseData> registerAndSubscribeAsync(String clientId, String eventName,
+			int expectedNoOfData) {
+		return SseTestClientSupport.openAsync(testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData,
+				null, (event, messageEvent) -> new ResponseData(event, messageEvent.getData(),
+						messageEvent.getLastEventId()));
+	}
+
 	private SseResponse<ResponseData> registerAndSubscribe(String clientId, String eventName, int expectedNoOfData,
 			@Nullable String lastEventId) {
-		return SseTestClientSupport.open(testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData,
+		SseResponse<ResponseData> response = SseTestClientSupport.open(
+				testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData,
 				lastEventId, (event, messageEvent) -> new ResponseData(event, messageEvent.getData(),
 						messageEvent.getLastEventId()));
+		SseTestClientSupport.awaitClientSubscribed(this.eventBus, clientId, eventName);
+		return response;
 	}
 
 	private SseResponse<ResponseData> registerAndSubscribeOnly(String clientId, String eventName,
