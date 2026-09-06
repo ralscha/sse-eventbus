@@ -1,7 +1,20 @@
 # Changelog
 
+## 3.2.1 - Unreleased
+* Keep both subscription indexes consistent during concurrent changes and return stable event snapshots
+* Make replay appends, reads, and cleanup atomic per client; purge expired events regardless of timestamp order
+* Add a configurable replay capacity (10,000 events per client by default), with oldest-first eviction
+* Prevent full retry queues from blocking send workers; report dropped retries through `afterEventDropped`
+* Reserve scheduler threads for maintenance when multiple send workers are configured
+* Clear subscriptions when registering with an empty replacement list, and remove all pending events on unregister
+* Protect replacement emitters from completion by an earlier send and allow registration of the same emitter
+* Keep client cleanup running when listener callbacks fail
+* Delegate multiline SSE encoding to Spring and validate event metadata before publication
+* Simplify broadcast/direct delivery and copy configured converter lists before adding defaults
+* Repair the Error Prone compiler profile, align Immutables processor versions, and run verification on pull requests
+
 ## 3.2.0 - April 22, 2026
-* New distributed event bus for cross-node SSE event delivery (`DistributedSseEventBus`)
+* New distributed event bus for cross-node SSE event delivery (`DistributedEventBus`)
 * Add JSpecify null-safety annotations with package-level `@NullMarked` defaults for the public API and configuration hooks
 * Add Error Prone with NullAway to enforce nullness contracts during compilation
 * Add Micrometer Observation instrumentation for client lifecycle, event delivery, and replay flows

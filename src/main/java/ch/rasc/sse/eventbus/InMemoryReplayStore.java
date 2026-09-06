@@ -15,10 +15,11 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
 
 import org.jspecify.annotations.Nullable;
@@ -28,12 +29,38 @@ import org.jspecify.annotations.Nullable;
  */
 public class InMemoryReplayStore implements ReplayStore {
 
-	private final ConcurrentMap<String, ConcurrentLinkedDeque<ReplayEvent>> replayEvents = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Deque<ReplayEvent>> replayEvents = new ConcurrentHashMap<>();
+
+	private final int maxEventsPerClient;
+
+	/**
+	 * Creates a store retaining at most 10,000 events per client.
+	 */
+	public InMemoryReplayStore() {
+		this(10_000);
+	}
+
+	/**
+	 * Creates a store with a per-client capacity. Oldest events are evicted first.
+	 * @param maxEventsPerClient maximum retained events per client; must be positive
+	 */
+	public InMemoryReplayStore(int maxEventsPerClient) {
+		if (maxEventsPerClient <= 0) {
+			throw new IllegalArgumentException("maxEventsPerClient must be positive");
+		}
+		this.maxEventsPerClient = maxEventsPerClient;
+	}
 
 	@Override
 	public void store(ReplayEvent replayEvent) {
-		this.replayEvents.computeIfAbsent(replayEvent.clientId(), key -> new ConcurrentLinkedDeque<>())
-			.addLast(replayEvent);
+		this.replayEvents.compute(replayEvent.clientId(), (key, events) -> {
+			Deque<ReplayEvent> retained = events != null ? events : new ArrayDeque<>();
+			if (retained.size() == this.maxEventsPerClient) {
+				retained.removeFirst();
+			}
+			retained.addLast(replayEvent);
+			return retained;
+		});
 	}
 
 	/**
@@ -50,33 +77,19 @@ public class InMemoryReplayStore implements ReplayStore {
 	 */
 	@Override
 	public List<ReplayEvent> getEventsSince(String clientId, @Nullable String lastEventId) {
-		@Nullable ConcurrentLinkedDeque<ReplayEvent> events = this.replayEvents.get(clientId);
-		if (events == null || events.isEmpty()) {
-			return List.of();
-		}
-
 		List<ReplayEvent> result = new ArrayList<>();
-		@Nullable String requestedLastEventId = lastEventId;
-		boolean replayAll = requestedLastEventId == null || requestedLastEventId.isEmpty();
-		boolean seenLastEvent = false;
-
-		for (ReplayEvent replayEvent : events) {
-			if (replayAll) {
-				result.add(replayEvent);
-				continue;
-			}
-			if (seenLastEvent) {
-				result.add(replayEvent);
-				continue;
-			}
-			if (requestedLastEventId != null && requestedLastEventId.equals(replayEvent.eventId())) {
-				seenLastEvent = true;
-			}
-		}
-
-		if (!replayAll && !seenLastEvent) {
-			result.clear();
+		// All deque access uses compute, so purge/clear/store cannot detach or mutate
+		// a history while it is being read.
+		this.replayEvents.computeIfPresent(clientId, (key, events) -> {
 			result.addAll(events);
+			return events;
+		});
+		if (lastEventId != null && !lastEventId.isEmpty()) {
+			for (int index = result.size() - 1; index >= 0; index--) {
+				if (lastEventId.equals(result.get(index).eventId())) {
+					return List.copyOf(result.subList(index + 1, result.size()));
+				}
+			}
 		}
 
 		return List.copyOf(result);
@@ -89,18 +102,10 @@ public class InMemoryReplayStore implements ReplayStore {
 
 	@Override
 	public void purgeExpired(long expirationTimestamp) {
-		this.replayEvents.forEach((clientId, events) -> {
-			while (true) {
-				@Nullable ReplayEvent first = events.peekFirst();
-				if (first == null || first.storedAt() >= expirationTimestamp) {
-					break;
-				}
-				events.pollFirst();
-			}
-			if (events.isEmpty()) {
-				this.replayEvents.remove(clientId, events);
-			}
-		});
+		this.replayEvents.keySet().forEach(clientId -> this.replayEvents.computeIfPresent(clientId, (key, events) -> {
+			events.removeIf(event -> event.storedAt() < expirationTimestamp);
+			return events.isEmpty() ? null : events;
+		}));
 	}
 
 }

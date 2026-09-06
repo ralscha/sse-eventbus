@@ -93,6 +93,32 @@ public interface SseEvent extends java.io.Serializable {
 	Optional<String> comment();
 
 	/**
+	 * Validates fields that must fit on a single SSE protocol line.
+	 * @throws IllegalArgumentException if event metadata cannot be encoded as SSE
+	 */
+	@Value.Check
+	default void validate() {
+		if (event().indexOf('\r') >= 0 || event().indexOf('\n') >= 0) {
+			throw new IllegalArgumentException("event must not contain CR or LF");
+		}
+		id().ifPresent(value -> {
+			if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0 || value.indexOf('\0') >= 0) {
+				throw new IllegalArgumentException("id must not contain CR, LF or NUL");
+			}
+		});
+		retry().ifPresent(value -> {
+			try {
+				if (value.toMillis() < 0 || value.isNegative()) {
+					throw new IllegalArgumentException("retry must not be negative");
+				}
+			}
+			catch (ArithmeticException ex) {
+				throw new IllegalArgumentException("retry must fit in milliseconds", ex);
+			}
+		});
+	}
+
+	/**
 	 * Creates a SseEvent that just contains the data. The data will be converted when
 	 * it's not a String instance. The event name will be the default 'message'.
 	 * @param data the data to send

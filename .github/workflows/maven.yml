@@ -1,6 +1,6 @@
 name: test
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -18,4 +18,4 @@ jobs:
         distribution: 'temurin'
         java-version: ${{ matrix.java-version }}
     - name: Build with Java ${{ matrix.java-version }}
-      run: ./mvnw -B clean test --file pom.xml   
+      run: ./mvnw -B -ntp ${{ matrix.java-version != 17 && '-Perror-prone' || '' }} verify --file pom.xml

@@ -342,10 +342,10 @@ public class SseEventBus {
 		emitter.onTimeout(emitter::complete);
 		registerClient(clientId, emitter, completeAfterMessage);
 
+		if (unsubscribe) {
+			unsubscribeFromAllEvents(clientId, events);
+		}
 		if (events != null && events.length > 0) {
-			if (unsubscribe) {
-				unsubscribeFromAllEvents(clientId, events);
-			}
 			for (String event : events) {
 				subscribe(clientId, event);
 			}
@@ -415,16 +415,18 @@ public class SseEventBus {
 				if (existing == null) {
 					return new Client(id, emitter, completeAfterMessage);
 				}
-				oldEmitter.set(existing.sseEmitter());
-				existing.updateEmitter(emitter);
-				existing.updateCompleteAfterMessage(completeAfterMessage);
-				existing.updateLastTransfer();
+				synchronized (existing) {
+					oldEmitter.set(existing.sseEmitter());
+					existing.updateEmitter(emitter);
+					existing.updateCompleteAfterMessage(completeAfterMessage);
+					existing.updateLastTransfer();
+				}
 				return existing;
 			});
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
-			if (oldEmitter.get() != null) {
+			if (oldEmitter.get() != null && oldEmitter.get() != emitter) {
 				try {
 					oldEmitter.get().complete();
 				}
@@ -475,14 +477,16 @@ public class SseEventBus {
 		try (Observation.Scope ignored = observation.openScope()) {
 			useObservationScope(ignored);
 			AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
-			this.clients.computeIfPresent(clientId, (id, client) -> {
-				removedEmitter.set(client.sseEmitter());
+			this.clients.compute(clientId, (id, client) -> {
+				if (client != null) {
+					removedEmitter.set(client.sseEmitter());
+				}
 				this.subscriptionRegistry.unsubscribeAll(id);
+				removePendingEvents(id);
+				clearReplayEvents(id);
+				this.replayLocks.remove(id);
 				return null;
 			});
-			removePendingReplayableEvents(clientId);
-			clearReplayEvents(clientId);
-			this.replayLocks.remove(clientId);
 			if (removedEmitter.get() != null) {
 				try {
 					removedEmitter.get().complete();
@@ -553,17 +557,12 @@ public class SseEventBus {
 	 * @param keepEvents events the client should stay subscribed to
 	 */
 	public void unsubscribeFromAllEvents(String clientId, String @Nullable ... keepEvents) {
-		@Nullable Set<String> keepEventsSet = null;
-		if (keepEvents != null && keepEvents.length > 0) {
-			keepEventsSet = new HashSet<>();
-			Collections.addAll(keepEventsSet, keepEvents);
+		if (keepEvents == null || keepEvents.length == 0) {
+			this.subscriptionRegistry.unsubscribeAll(clientId);
+			return;
 		}
-
-		Set<String> events = this.subscriptionRegistry.getAllEvents();
-		if (keepEventsSet != null) {
-			events = new HashSet<>(events);
-			events.removeAll(keepEventsSet);
-		}
+		Set<String> events = new HashSet<>(this.subscriptionRegistry.getAllEvents());
+		events.removeAll(new HashSet<>(List.of(keepEvents)));
 		events.forEach(event -> unsubscribe(clientId, event));
 	}
 
@@ -627,7 +626,7 @@ public class SseEventBus {
 		SseEventBusObservationContext observationContext = createObservationContext(operation);
 		observationContext.setEventName(event.event());
 		observationContext.setDirectEvent(!event.clientIds().isEmpty());
-		observationContext.setReplay(this.replayEnabled && event.id().isPresent());
+		observationContext.setReplay(this.replayEnabled && event.id().filter(id -> !id.isEmpty()).isPresent());
 		Observation observation = startObservation(observationContext);
 		try (Observation.Scope ignored = observation.openScope()) {
 			useObservationScope(ignored);
@@ -636,70 +635,37 @@ public class SseEventBus {
 			@Nullable String convertedValue = null;
 			boolean converted = event.data() instanceof String;
 
-			if (event.clientIds().isEmpty()) {
-				Set<String> subscribers = this.subscriptionRegistry.getSubscribers(event.event());
-				Set<String> excludes = event.excludeClientIds();
-				for (String subscriberId : subscribers) {
-					if (!excludes.isEmpty() && excludes.contains(subscriberId)) {
-						continue;
+			boolean broadcast = event.clientIds().isEmpty();
+			Set<String> recipients = broadcast ? this.subscriptionRegistry.getSubscribers(event.event())
+					: event.clientIds();
+			for (String clientId : recipients) {
+				if (broadcast ? event.excludeClientIds().contains(clientId)
+						: !this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
+					continue;
+				}
+				@Nullable Client client = this.clients.get(clientId);
+				if (client == null) {
+					continue;
+				}
+				if (!converted) {
+					convertedValue = this.convertObject(event);
+					converted = true;
+				}
+				if (this.replayEnabled) {
+					ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
+					lock.lock();
+					try {
+						storeReplayEvent(clientId, event, convertedValue);
+						queueOrSend(new ClientEvent(client, event, convertedValue), true);
 					}
-					@Nullable Client client = this.clients.get(subscriberId);
-					if (client != null) {
-						if (!converted) {
-							convertedValue = this.convertObject(event);
-							converted = true;
-						}
-						if (this.replayEnabled) {
-							ReentrantLock lock = this.replayLocks.computeIfAbsent(subscriberId,
-									k -> new ReentrantLock());
-							lock.lock();
-							try {
-								storeReplayEvent(subscriberId, event, convertedValue);
-								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-								queueOrSend(clientEvent, true);
-								deliveryCount++;
-							}
-							finally {
-								lock.unlock();
-							}
-						}
-						else {
-							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-							queueOrSend(clientEvent, true);
-							deliveryCount++;
-						}
+					finally {
+						lock.unlock();
 					}
 				}
-			}
-			else {
-				for (String clientId : event.clientIds()) {
-					@Nullable Client client = this.clients.get(clientId);
-					if (client != null
-							&& this.subscriptionRegistry.isClientSubscribedToEvent(clientId, event.event())) {
-						if (!converted) {
-							convertedValue = this.convertObject(event);
-							converted = true;
-						}
-						if (this.replayEnabled) {
-							ReentrantLock lock = this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
-							lock.lock();
-							try {
-								storeReplayEvent(clientId, event, convertedValue);
-								ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-								queueOrSend(clientEvent, true);
-								deliveryCount++;
-							}
-							finally {
-								lock.unlock();
-							}
-						}
-						else {
-							ClientEvent clientEvent = new ClientEvent(client, event, convertedValue);
-							queueOrSend(clientEvent, true);
-							deliveryCount++;
-						}
-					}
+				else {
+					queueOrSend(new ClientEvent(client, event, convertedValue), true);
 				}
+				deliveryCount++;
 			}
 			observationContext.setDeliveryCount(deliveryCount);
 			observationContext.setOutcome("success");
@@ -758,48 +724,24 @@ public class SseEventBus {
 
 	private void reScheduleFailedEvents() {
 		try {
-			List<ClientEvent> failedEvents = new ArrayList<>();
-			this.errorQueue.drainTo(failedEvents);
-
-			for (ClientEvent sseClientEvent : failedEvents) {
-				String clientId = sseClientEvent.getClient().getId();
-
-				// Skip events for clients that are no longer registered
-				if (!this.clients.containsKey(clientId)) {
+			// Process a bounded batch. Neither side of the retry cycle may block on
+			// a full queue, otherwise failed sends and rescheduling can deadlock.
+			int pending = this.errorQueue.size();
+			for (int index = 0; index < pending; index++) {
+				@Nullable ClientEvent clientEvent = this.errorQueue.poll();
+				if (clientEvent == null) {
+					break;
+				}
+				String clientId = clientEvent.getClient().getId();
+				if (this.clients.get(clientId) != clientEvent.getClient() || !this.subscriptionRegistry
+					.isClientSubscribedToEvent(clientId, clientEvent.getSseEvent().event())) {
 					continue;
 				}
-
-				// Respect exponential backoff — not ready yet, put back
-				if (!sseClientEvent.isReadyForRetry()) {
-					try {
-						this.errorQueue.put(sseClientEvent);
-					}
-					catch (InterruptedException ie) {
-						Thread.currentThread().interrupt();
-					}
-					continue;
+				if (clientEvent.isReadyForRetry() && this.sendQueue.offer(clientEvent)) {
+					notifyAfterEventQueued(clientEvent, false);
 				}
-
-				if (this.subscriptionRegistry.isClientSubscribedToEvent(clientId,
-						sseClientEvent.getSseEvent().event())) {
-					try {
-						this.sendQueue.put(sseClientEvent);
-						notifyAfterEventQueued(sseClientEvent, false);
-					}
-					catch (InterruptedException ie) {
-						logger.error("re-adding event into send queue failed", ie);
-						Thread.currentThread().interrupt();
-					}
-					catch (Exception e) {
-						logger.error("re-adding event into send queue failed", e);
-						try {
-							this.errorQueue.put(sseClientEvent);
-						}
-						catch (InterruptedException ie) {
-							logger.error("re-adding event into error queue failed", ie);
-							Thread.currentThread().interrupt();
-						}
-					}
+				else {
+					offerRetry(clientEvent);
 				}
 			}
 		}
@@ -808,10 +750,34 @@ public class SseEventBus {
 		}
 	}
 
+	private void offerRetry(ClientEvent clientEvent) {
+		if (!this.errorQueue.offer(clientEvent)) {
+			logger.warn("Retry queue full; dropping event for client " + clientEvent.getClient().getId());
+			try {
+				this.listener.afterEventDropped(clientEvent);
+			}
+			catch (Exception ex) {
+				logger.error("calling afterEventDropped hook failed", ex);
+			}
+		}
+	}
+
+	private void notifyAfterClientsUnregistered(Set<String> clientIds) {
+		try {
+			this.listener.afterClientsUnregistered(clientIds);
+		}
+		catch (Exception ex) {
+			logger.error("calling afterClientsUnregistered hook failed", ex);
+		}
+	}
+
 	private void eventLoop() {
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				ClientEvent clientEvent = this.sendQueue.take();
+				if (this.clients.get(clientEvent.getClient().getId()) != clientEvent.getClient()) {
+					continue;
+				}
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
 					Client client = clientEvent.getClient();
 					@Nullable Exception e = sendEventToClient(clientEvent);
@@ -821,25 +787,21 @@ public class SseEventBus {
 					}
 					else {
 						clientEvent.incErrorCounter();
-						try {
-							this.errorQueue.put(clientEvent);
-						}
-						catch (InterruptedException ie) {
-							logger.error("adding event into error queue failed", ie);
-							Thread.currentThread().interrupt();
-						}
 						notifyAfterEventSent(clientEvent, e);
+						if (clientEvent.getErrorCounter() >= this.noOfSendResponseTries) {
+							String clientId = client.getId();
+							unregisterClient(clientId);
+							notifyAfterClientsUnregistered(Collections.singleton(clientId));
+						}
+						else {
+							offerRetry(clientEvent);
+						}
 					}
 				}
 				else {
 					String clientId = clientEvent.getClient().getId();
 					this.unregisterClient(clientId);
-					try {
-						this.listener.afterClientsUnregistered(Collections.singleton(clientId));
-					}
-					catch (Exception ex) {
-						logger.error("calling afterClientsUnregistered hook failed", ex);
-					}
+					notifyAfterClientsUnregistered(Collections.singleton(clientId));
 				}
 			}
 			catch (InterruptedException ie) {
@@ -856,7 +818,8 @@ public class SseEventBus {
 		observationContext.setClientId(clientEvent.getClient().getId());
 		observationContext.setEventName(clientEvent.getSseEvent().event());
 		observationContext.setDirectEvent(!clientEvent.getSseEvent().clientIds().isEmpty());
-		observationContext.setReplay(this.replayEnabled && clientEvent.getSseEvent().id().isPresent());
+		observationContext
+			.setReplay(this.replayEnabled && clientEvent.getSseEvent().id().filter(id -> !id.isEmpty()).isPresent());
 		observationContext.setCompleteAfterMessage(clientEvent.getClient().isCompleteAfterMessage());
 		observationContext.setAttempt(clientEvent.getErrorCounter() + 1);
 		Observation observation = startObservation(observationContext);
@@ -877,9 +840,15 @@ public class SseEventBus {
 	private static @Nullable Exception doSendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
-			client.sseEmitter().send(clientEvent.createSseEventBuilder());
-			if (client.isCompleteAfterMessage()) {
-				client.sseEmitter().complete();
+			SseEmitter emitter;
+			boolean completeAfterMessage;
+			synchronized (client) {
+				emitter = client.sseEmitter();
+				completeAfterMessage = client.isCompleteAfterMessage();
+			}
+			emitter.send(clientEvent.createSseEventBuilder());
+			if (completeAfterMessage) {
+				emitter.complete();
 			}
 			return null;
 		}
@@ -921,15 +890,15 @@ public class SseEventBus {
 					if (client.lastTransfer() < recheckExpiration) {
 						removedEmitter.set(client.sseEmitter());
 						this.subscriptionRegistry.unsubscribeAll(id);
+						removePendingEvents(id);
+						clearReplayEvents(id);
+						this.replayLocks.remove(id);
 						return null;
 					}
 					return client;
 				});
 				if (removedEmitter.get() != null) {
 					actuallyRemoved.add(clientId);
-					removePendingReplayableEvents(clientId);
-					clearReplayEvents(clientId);
-					this.replayLocks.remove(clientId);
 					try {
 						removedEmitter.get().complete();
 					}
@@ -939,7 +908,7 @@ public class SseEventBus {
 				}
 			}
 			if (!actuallyRemoved.isEmpty()) {
-				this.listener.afterClientsUnregistered(actuallyRemoved);
+				notifyAfterClientsUnregistered(actuallyRemoved);
 			}
 		}
 	}
@@ -1158,11 +1127,16 @@ public class SseEventBus {
 			.start();
 	}
 
+	private void removePendingEvents(String clientId) {
+		this.sendQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId));
+		this.errorQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId));
+	}
+
 	private void removePendingReplayableEvents(String clientId) {
 		this.sendQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
-				&& clientEvent.getSseEvent().id().isPresent());
+				&& clientEvent.getSseEvent().id().filter(id -> !id.isEmpty()).isPresent());
 		this.errorQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
-				&& clientEvent.getSseEvent().id().isPresent());
+				&& clientEvent.getSseEvent().id().filter(id -> !id.isEmpty()).isPresent());
 	}
 
 	private void purgeExpiredReplayEvents() {

@@ -1,7 +1,7 @@
 [![Test Status](https://github.com/ralscha/sse-eventbus/actions/workflows/maven.yml/badge.svg)](https://github.com/ralscha/sse-eventbus/actions/workflows/maven.yml)
 
 
-sse-eventbus is a Java library that sits on top of [Spring's Sever-Sent Event support](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-ann-async-sse).   
+sse-eventbus is a Java library that sits on top of [Spring's Server-Sent Event support](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-ann-async-sse).
 It keeps track of connected clients and broadcasts events to them.
 
 ## Usage
@@ -112,8 +112,10 @@ this.eventBus.handleEvent(SseEvent.builder()
 Notes:
 * Replay is in-memory only when using `InMemoryReplayStore`; retained events are lost on restart.
 * `unregisterClient` clears retained replay history for that client.
-* Events without `id(...)` are delivered live only and are never replayed.
+* Events without `id(...)`, or with an empty id, are delivered live only and are never replayed.
 * Retained events older than `replayRetention()` are removed by the replay cleanup job.
+* `InMemoryReplayStore` retains at most 10,000 events per client. Use `new InMemoryReplayStore(2_000)` to choose another positive limit. The oldest events are evicted first, independently of time-based retention.
+* If the last event id has expired or been evicted, all remaining history is replayed. Use unique ids and make client handlers tolerate duplicates; if an id occurs more than once, replay resumes after its last occurrence.
 
 ### Heartbeats
 
@@ -194,6 +196,20 @@ public class DataEmitterService {
 ```
 
 
+### Delivery queues and retries
+
+The default send queue holds 10,000 events and blocks publishers when full. Failed sends use a separate bounded retry queue with exponential backoff. When that queue is full, the failed event is dropped from retry delivery and logged, and `SseEventBusListener.afterEventDropped(ClientEvent)` is called. Replay history remains available when configured.
+
+Override `sendWorkerCount()` to send to multiple clients concurrently. The default scheduler reserves two additional threads for retries, heartbeats, and cleanup. A custom scheduler must also leave threads available for these jobs. Multiple workers and retries can change delivery order; keep one worker when normal queue order matters.
+
+With `taskScheduler()` returning `null`, sends are synchronous and retries, heartbeats, client expiration, and replay cleanup jobs are disabled.
+
+`createSseEmitter(..., unsubscribe = true, ...)` replaces subscriptions, including clearing all subscriptions when no events are supplied. Explicit unregister removes subscriptions, pending sends, retries, and replay history.
+
+### Event metadata
+
+Event names cannot contain CR or LF. Event ids cannot contain CR, LF, or NUL; an empty id is allowed to reset the client's last event id. Retry durations must be nonnegative and fit in milliseconds. Invalid metadata is rejected when building an event, before it enters delivery queues. String data and comments support LF, CRLF, and CR line endings according to the [SSE stream format](https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream).
+
 ## Maven
 The library is hosted on the Central Maven Repository
 ```
@@ -211,10 +227,14 @@ Unless an API element is annotated with `@Nullable`, values should be treated as
 
 Build-time nullness checking is enforced with Error Prone and the NullAway plugin.
 
-The stricter Error Prone and NullAway checks are enabled automatically when Maven
-runs on JDK 21 or newer. Builds running on JDK 17 still compile and test normally,
-but without the Error Prone plugin, because recent Error Prone releases require a
-newer runtime than Java 17.
+Enable the stricter Error Prone and NullAway checks with `-Perror-prone` when Maven
+runs on JDK 21 or newer. Builds running on JDK 17 compile and test without this
+profile because recent Error Prone releases require a newer runtime than Java 17.
+CI runs this profile on JDK 21 and newer for both pushes and pull requests.
+
+Run `./mvnw -B -ntp verify` to compile, run unit and HTTP integration tests, build the
+jar, and check license headers. On Windows, use `./mvnw.cmd` instead. Use
+`./mvnw -B -ntp -Perror-prone verify` for static analysis as well.
 
 Nullable contracts are declared explicitly for cases such as:
 

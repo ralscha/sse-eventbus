@@ -28,6 +28,8 @@ import org.jspecify.annotations.Nullable;
 import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
@@ -397,8 +399,7 @@ public class IntegrationTest {
 		sseEvent = SseEvent.builder().event("eventName").data("payload3").build();
 		this.eventPublisher.publishEvent(sseEvent);
 
-		await().atMost(Duration.ofSeconds(5))
-			.until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
+		await().atMost(Duration.ofSeconds(5)).until(() -> this.testListener.getAfterEventSentFail().size() >= 3);
 
 		sseResponse = registerSubscribe("1", "eventName", 3);
 		assertSseResponse(sseResponse, new ResponseData("eventName", "payload1"),
@@ -616,11 +617,14 @@ public class IntegrationTest {
 		sseResponse.eventSource().close();
 	}
 
-	@Test
-	public void testMultiline() throws IOException {
+	@ParameterizedTest
+	@ValueSource(
+			strings = { "1. line\n2. line", "1. line\r\n2. line", "1. line\r2. line", "1. line\r\n\r\n2. line\r\n" })
+	public void testMultiline(String payload) throws IOException {
 		SseResponse<ResponseData> sseResponse = registerSubscribe("1", "eventName");
-		this.eventPublisher.publishEvent(SseEvent.of("eventName", "1. line\n2. line"));
-		assertSseResponse(sseResponse, new ResponseData("eventName", "1. line\n2. line"));
+		this.eventPublisher.publishEvent(SseEvent.of("eventName", payload));
+		assertSseResponse(sseResponse,
+				new ResponseData("eventName", payload.replace("\r\n", "\n").replace('\r', '\n')));
 
 		sseResponse.eventSource().close();
 	}
@@ -696,10 +700,9 @@ public class IntegrationTest {
 
 	private SseResponse<ResponseData> registerAndSubscribe(String clientId, String eventName, int expectedNoOfData,
 			@Nullable String lastEventId) {
-		SseResponse<ResponseData> response = SseTestClientSupport.open(
-				testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData,
-				lastEventId, (event, messageEvent) -> new ResponseData(event, messageEvent.getData(),
-						messageEvent.getLastEventId()));
+		SseResponse<ResponseData> response = SseTestClientSupport
+			.open(testUrl("/register/" + clientId + "/" + eventName), expectedNoOfData, lastEventId, (event,
+					messageEvent) -> new ResponseData(event, messageEvent.getData(), messageEvent.getLastEventId()));
 		SseTestClientSupport.awaitClientSubscribed(this.eventBus, clientId, eventName);
 		return response;
 	}

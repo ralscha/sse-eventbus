@@ -62,10 +62,7 @@ public class ClientEvent {
 		this.event.comment().ifPresent(sseBuilder::comment);
 
 		if (this.convertedValue != null) {
-			addStringData(sseBuilder, this.convertedValue);
-		}
-		else if (this.event.data() instanceof String stringData) {
-			addStringData(sseBuilder, stringData);
+			sseBuilder.data(this.convertedValue);
 		}
 		else {
 			@Nullable Object data = this.event.data();
@@ -76,15 +73,6 @@ public class ClientEvent {
 
 		return sseBuilder;
 
-	}
-
-	private static void addStringData(SseEventBuilder sseBuilder, String value) {
-		int start = 0;
-		for (int index = value.indexOf('\n'); index >= 0; index = value.indexOf('\n', start)) {
-			sseBuilder.data(value.substring(start, index));
-			start = index + 1;
-		}
-		sseBuilder.data(value.substring(start));
 	}
 
 	void incErrorCounter() {

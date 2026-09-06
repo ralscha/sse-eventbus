@@ -89,10 +89,8 @@ public class DefaultSseEventBusConfiguration {
 			store = config.replayStore();
 		}
 
-		@Nullable List<DataObjectConverter> converters = this.dataObjectConverters;
-		if (converters == null) {
-			converters = new ArrayList<>();
-		}
+		List<DataObjectConverter> converters = this.dataObjectConverters != null
+				? new ArrayList<>(this.dataObjectConverters) : new ArrayList<>();
 
 		if (this.objectMapper != null) {
 			converters.add(new JacksonDataObjectConverter(this.objectMapper));

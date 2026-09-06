@@ -92,17 +92,20 @@ public interface SseEventBusConfigurer {
 	 * An executor that schedules and runs the internal jobs
 	 * <p>
 	 * By default this is an instance created with
-	 * {@link Executors#newScheduledThreadPool(int) Executors.newScheduledThreadPool(3)}
+	 * {@link Executors#newScheduledThreadPool(int)} with {@link #sendWorkerCount()} send
+	 * threads and two additional threads for scheduled jobs. Custom executors must also
+	 * leave threads available for scheduled jobs while the send loops are running.
 	 */
 	default @Nullable ScheduledExecutorService taskScheduler() {
-		return Executors.newScheduledThreadPool(3);
+		return Executors.newScheduledThreadPool(Math.max(1, sendWorkerCount()) + 2);
 	}
 
 	/**
 	 * Queue for events that failed to send and need to be retried.
 	 * <p>
-	 * Default: bounded {@link LinkedBlockingQueue} with a capacity of 10,000. Producers
-	 * will block when the queue is full, providing backpressure.
+	 * Default: bounded {@link LinkedBlockingQueue} with a capacity of 10,000. Failed
+	 * events are dropped when this queue is full so workers cannot deadlock with the
+	 * retry job. Drops are reported to {@link SseEventBusListener#afterEventDropped}.
 	 */
 	default BlockingQueue<ClientEvent> errorQueue() {
 		return new LinkedBlockingQueue<>(10_000);

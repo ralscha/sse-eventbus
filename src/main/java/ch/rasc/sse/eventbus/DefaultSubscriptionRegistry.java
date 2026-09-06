@@ -47,19 +47,19 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	}
 
 	@Override
-	public void subscribe(String clientId, String event) {
+	public synchronized void subscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfAbsent(event, k -> ConcurrentHashMap.newKeySet()).add(clientId);
 		this.clientEvents.computeIfAbsent(clientId, k -> ConcurrentHashMap.newKeySet()).add(event);
 	}
 
 	@Override
-	public void unsubscribe(String clientId, String event) {
+	public synchronized void unsubscribe(String clientId, String event) {
 		this.eventSubscribers.computeIfPresent(event, (k, set) -> set.remove(clientId) && set.isEmpty() ? null : set);
 		this.clientEvents.computeIfPresent(clientId, (k, set) -> set.remove(event) && set.isEmpty() ? null : set);
 	}
 
 	@Override
-	public boolean isClientSubscribedToEvent(String clientId, String eventName) {
+	public synchronized boolean isClientSubscribedToEvent(String clientId, String eventName) {
 		@Nullable Set<String> subscribedClients = this.eventSubscribers.get(eventName);
 		if (subscribedClients != null) {
 			return subscribedClients.contains(clientId);
@@ -68,12 +68,12 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	}
 
 	@Override
-	public Set<String> getAllEvents() {
-		return Collections.unmodifiableSet(this.eventSubscribers.keySet());
+	public synchronized Set<String> getAllEvents() {
+		return Set.copyOf(this.eventSubscribers.keySet());
 	}
 
 	@Override
-	public Map<String, Set<String>> getAllSubscriptions() {
+	public synchronized Map<String, Set<String>> getAllSubscriptions() {
 		Map<String, Set<String>> result = new HashMap<>();
 		this.eventSubscribers.forEach((k, v) -> {
 			result.put(k, Set.copyOf(v));
@@ -82,7 +82,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	}
 
 	@Override
-	public Set<String> getSubscribers(String event) {
+	public synchronized Set<String> getSubscribers(String event) {
 		@Nullable Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
 			return Set.copyOf(clientIds);
@@ -91,7 +91,7 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	}
 
 	@Override
-	public int countSubscribers(String event) {
+	public synchronized int countSubscribers(String event) {
 		@Nullable Set<String> clientIds = this.eventSubscribers.get(event);
 		if (clientIds != null) {
 			return clientIds.size();
@@ -100,12 +100,12 @@ public class DefaultSubscriptionRegistry implements SubscriptionRegistry {
 	}
 
 	@Override
-	public boolean hasSubscribers(String event) {
+	public synchronized boolean hasSubscribers(String event) {
 		return this.eventSubscribers.containsKey(event);
 	}
 
 	@Override
-	public void unsubscribeAll(String clientId) {
+	public synchronized void unsubscribeAll(String clientId) {
 		@Nullable Set<String> events = this.clientEvents.remove(clientId);
 		if (events != null) {
 			for (String event : events) {
