@@ -42,8 +42,42 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEvent
  * </ul>
  * In both cases {@link SlowClientListener} is notified and Micrometer metrics are
  * recorded when configured.
+ * <p>
+ * Delivery accounting happens on the dispatcher thread: {@link DeliveryListener} is
+ * invoked after the event was actually written to the {@code SseEmitter} (or after a
+ * send failure), so an enqueued event is never reported as delivered before the sink
+ * has run.
  */
 final class ClientSendBuffer implements AutoCloseable {
+
+	/**
+	 * Result of an {@link #offer(ClientEvent)} call.
+	 */
+	enum OfferResult {
+
+		/**
+		 * The event was enqueued; delivery is reported asynchronously.
+		 */
+		ACCEPTED,
+
+		/**
+		 * The queue was full and the event was dropped by the
+		 * {@link OverflowPolicy#DROP} policy.
+		 */
+		DROPPED,
+
+		/**
+		 * The queue was full and the slow client was disconnected by the
+		 * {@link OverflowPolicy#DISCONNECT} policy.
+		 */
+		DISCONNECTED,
+
+		/**
+		 * The buffer is already closed, the event was not enqueued.
+		 */
+		CLOSED
+
+	}
 
 	/**
 	 * Writes an event to the underlying SSE connection.
@@ -55,15 +89,37 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	}
 
+	/**
+	 * Delivery accounting callback, invoked on the dispatcher thread.
+	 */
+	interface DeliveryListener {
+
+		/**
+		 * Called after the event was successfully written to the connection.
+		 * @param event the delivered event
+		 */
+		void delivered(ClientEvent event);
+
+		/**
+		 * Called after writing the event failed.
+		 * @param event the failed event
+		 * @param exception the failure cause
+		 */
+		void failed(ClientEvent event, Exception exception);
+
+	}
+
 	private final String clientId;
 
 	private final int capacity;
 
 	private final OverflowPolicy overflowPolicy;
 
-	private final BlockingQueue<SseEventBuilder> queue;
+	private final BlockingQueue<ClientEvent> queue;
 
 	private final EventSink sink;
+
+	private final DeliveryListener deliveryListener;
 
 	private final @Nullable Runnable onDisconnect;
 
@@ -73,10 +129,12 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private final AtomicBoolean closed = new AtomicBoolean();
 
+	private final AtomicBoolean draining = new AtomicBoolean();
+
 	private volatile @Nullable Thread dispatcherThread;
 
 	ClientSendBuffer(String clientId, int capacity, OverflowPolicy overflowPolicy, EventSink sink,
-			@Nullable Runnable onDisconnect, @Nullable SlowClientListener listener,
+			DeliveryListener deliveryListener, @Nullable Runnable onDisconnect, @Nullable SlowClientListener listener,
 			@Nullable SseBackpressureMetrics metrics) {
 		this.clientId = Objects.requireNonNull(clientId, "clientId");
 		if (capacity <= 0) {
@@ -86,6 +144,7 @@ final class ClientSendBuffer implements AutoCloseable {
 		this.overflowPolicy = Objects.requireNonNull(overflowPolicy, "overflowPolicy");
 		this.queue = new LinkedBlockingQueue<>(capacity);
 		this.sink = Objects.requireNonNull(sink, "sink");
+		this.deliveryListener = Objects.requireNonNull(deliveryListener, "deliveryListener");
 		this.onDisconnect = onDisconnect;
 		this.listener = listener;
 		this.metrics = metrics;
@@ -106,16 +165,15 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	/**
 	 * Attempts to enqueue an event for this client.
-	 * @param event the SSE event to enqueue
-	 * @return {@code true} when the event was accepted, {@code false} when it was
-	 * dropped or the buffer is closed
+	 * @param event the event to enqueue
+	 * @return the result of the enqueue attempt
 	 */
-	boolean offer(SseEventBuilder event) {
+	OfferResult offer(ClientEvent event) {
 		if (this.closed.get()) {
-			return false;
+			return OfferResult.CLOSED;
 		}
 		if (this.queue.offer(event)) {
-			return true;
+			return OfferResult.ACCEPTED;
 		}
 		int queueSize = this.queue.size();
 		if (this.metrics != null) {
@@ -127,7 +185,7 @@ final class ClientSendBuffer implements AutoCloseable {
 				this.metrics.recordDropped(this.clientId);
 			}
 			notifySlowClient(queueSize, "send buffer full, new event dropped");
-			return false;
+			return OfferResult.DROPPED;
 		}
 		case DISCONNECT -> {
 			if (this.metrics != null) {
@@ -135,7 +193,7 @@ final class ClientSendBuffer implements AutoCloseable {
 			}
 			notifySlowClient(queueSize, "send buffer full, slow client disconnected");
 			closeAndNotifyDisconnect();
-			return false;
+			return OfferResult.DISCONNECTED;
 		}
 		default -> throw new IllegalStateException("Unsupported overflow policy: " + this.overflowPolicy);
 		}
@@ -159,26 +217,63 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private void dispatchLoop() {
 		try {
-			while (!this.closed.get()) {
-				SseEventBuilder event = this.queue.poll(200, TimeUnit.MILLISECONDS);
+			while (!Thread.currentThread().isInterrupted()) {
+				ClientEvent event = this.queue.poll(200, TimeUnit.MILLISECONDS);
 				if (event == null) {
+					if (this.closed.get() || this.draining.get()) {
+						break;
+					}
 					continue;
 				}
-				this.sink.send(event);
+				deliver(event);
 			}
 		}
 		catch (InterruptedException ie) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	private void deliver(ClientEvent event) {
+		try {
+			this.sink.send(event.createSseEventBuilder());
+			this.deliveryListener.delivered(event);
+		}
 		catch (Exception ex) {
-			// the connection is gone, close the buffer
+			this.deliveryListener.failed(event, ex);
 			closeAndNotifyDisconnect();
 		}
 	}
 
 	/**
-	 * Closes the buffer without firing the disconnect callback. Used when the client is
-	 * re-registered or unregistered through the regular lifecycle.
+	 * Waits until the dispatcher thread has delivered all currently queued events, or
+	 * until the timeout elapses. After this method returns the buffer can be closed
+	 * without losing events. Idempotent.
+	 * @param timeoutMillis maximum time to wait for the queue to drain
+	 */
+	void drain(long timeoutMillis) {
+		this.draining.set(true);
+		Thread thread = this.dispatcherThread;
+		if (thread == null || thread == Thread.currentThread()) {
+			return;
+		}
+		long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+		try {
+			while (thread.isAlive() && System.nanoTime() < deadline) {
+				Thread.sleep(10);
+			}
+			if (thread.isAlive()) {
+				thread.interrupt();
+			}
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	/**
+	 * Closes the buffer without firing the disconnect callback and without draining the
+	 * queue. Used when the client is re-registered or unregistered through the regular
+	 * lifecycle.
 	 */
 	@Override
 	public void close() {
