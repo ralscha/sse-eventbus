@@ -23,11 +23,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 
 import ch.rasc.sse.eventbus.Client;
 import ch.rasc.sse.eventbus.ClientEvent;
+import ch.rasc.sse.eventbus.OverflowPolicy;
 import ch.rasc.sse.eventbus.ReplayStore;
+import ch.rasc.sse.eventbus.SlowClientListener;
 import ch.rasc.sse.eventbus.SseEventBusListener;
 
 /**
@@ -176,6 +179,48 @@ public interface SseEventBusConfigurer {
 	 */
 	default Duration replayCleanupJobDelay() {
 		return replayRetention();
+	}
+
+	/**
+	 * Optional capacity of a bounded per-client send buffer. When greater than zero
+	 * every client gets its own bounded queue with a dedicated dispatcher thread.
+	 * Slow clients (for example LLM token streaming consumers that cannot keep up)
+	 * fill their buffer and are handled according to {@link #overflowPolicy()}
+	 * instead of blocking the shared send workers.
+	 * <p>
+	 * Default: -1 (disabled, events are sent through the shared send queue)
+	 */
+	default int clientSendBufferCapacity() {
+		return -1;
+	}
+
+	/**
+	 * Policy applied when a client's send buffer is full.
+	 * <p>
+	 * Default: {@link OverflowPolicy#DROP}
+	 */
+	default OverflowPolicy overflowPolicy() {
+		return OverflowPolicy.DROP;
+	}
+
+	/**
+	 * Listener notified when a client has been detected as slow.
+	 * <p>
+	 * Default: no-op listener
+	 */
+	default SlowClientListener slowClientListener() {
+		return event -> {
+			// nothing here
+		};
+	}
+
+	/**
+	 * Optional Micrometer registry used to record slow client backpressure metrics.
+	 * <p>
+	 * Default: {@code null} (metrics are disabled)
+	 */
+	default @Nullable MeterRegistry meterRegistry() {
+		return null;
 	}
 
 }

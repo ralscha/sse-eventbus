@@ -43,6 +43,7 @@ import ch.rasc.sse.eventbus.observation.DefaultSseEventBusObservationConvention;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext.Operation;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PostConstruct;
@@ -99,6 +100,14 @@ public class SseEventBus {
 	private final boolean replayEnabled;
 
 	private final int sendWorkerCount;
+
+	private final int clientSendBufferCapacity;
+
+	private final OverflowPolicy overflowPolicy;
+
+	private final SlowClientListener slowClientListener;
+
+	private final @Nullable SseBackpressureMetrics backpressureMetrics;
 
 	private final @Nullable ReplayStore replayStore;
 
@@ -187,6 +196,14 @@ public class SseEventBus {
 		this.replayEnabled = replayStore != null;
 		this.replayRetention = configurer.replayRetention();
 		this.replayCleanupJobDelay = configurer.replayCleanupJobDelay();
+		this.clientSendBufferCapacity = configurer.clientSendBufferCapacity();
+		this.overflowPolicy = configurer.overflowPolicy();
+		this.slowClientListener = configurer.slowClientListener();
+		MeterRegistry meterRegistry = configurer.meterRegistry();
+		this.backpressureMetrics = meterRegistry != null ? new SseBackpressureMetrics(meterRegistry) : null;
+		if (this.backpressureMetrics != null) {
+			this.backpressureMetrics.registerActiveClientsGauge(this::countSendBuffers);
+		}
 		this.observationRegistry = observationRegistry != null ? observationRegistry : ObservationRegistry.NOOP;
 		this.observationConvention = observationConvention != null ? observationConvention
 				: DEFAULT_OBSERVATION_CONVENTION;
@@ -251,17 +268,40 @@ public class SseEventBus {
 			this.sendQueue.drainTo(remaining);
 			for (ClientEvent clientEvent : remaining) {
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
-					Exception exception = sendEventToClient(clientEvent);
-					if (exception != null && logger.isDebugEnabled()) {
-						logger.debug("Shutdown flush failed for client " + clientEvent.getClient().getId(), exception);
+					SendResult result = sendEventToClient(clientEvent);
+					if (result.outcome == SendOutcome.FAILED && logger.isDebugEnabled()) {
+						logger.debug("Shutdown flush failed for client " + clientEvent.getClient().getId(),
+								result.exception);
 					}
 				}
 			}
 			if (!remaining.isEmpty()) {
 				logger.info("SseEventBus flushed " + remaining.size() + " pending events on shutdown");
 			}
-			logger.info("SseEventBus shut down");
 		}
+
+		// Gracefully deliver events already accepted into per-client send buffers, then
+		// close the buffers. Per-client buffers are also active in synchronous mode
+		// (taskScheduler == null), so this lifecycle must not be conditional on the
+		// scheduler. Draining is started for all buffers in parallel and bounded by a
+		// single shared deadline.
+		for (Client client : this.clients.values()) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.startDraining();
+			}
+		}
+		long drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+		for (Client client : this.clients.values()) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.awaitDrained(drainDeadline);
+			}
+		}
+		for (Client client : this.clients.values()) {
+			closeClientSendBuffer(client);
+		}
+		logger.info("SseEventBus shut down");
 	}
 
 	/**
@@ -423,6 +463,12 @@ public class SseEventBus {
 				}
 				return existing;
 			});
+			// Setup the send buffer under the same atomic map operation so a concurrent
+			// unregister cannot detach the client between the map update and the setup
+			this.clients.computeIfPresent(clientId, (id, client) -> {
+				setupClientSendBuffer(client);
+				return client;
+			});
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
@@ -480,6 +526,7 @@ public class SseEventBus {
 			this.clients.compute(clientId, (id, client) -> {
 				if (client != null) {
 					removedEmitter.set(client.sseEmitter());
+					closeClientSendBuffer(client);
 				}
 				this.subscriptionRegistry.unsubscribeAll(id);
 				removePendingEvents(id);
@@ -694,13 +741,22 @@ public class SseEventBus {
 		}
 
 		notifyAfterEventQueued(clientEvent, firstAttempt);
-		@Nullable Exception exception = sendEventToClient(clientEvent);
-		if (exception == null) {
+		SendResult result = sendEventToClient(clientEvent);
+		switch (result.outcome) {
+		case SENT -> {
 			clientEvent.getClient().updateLastTransfer();
+			notifyAfterEventSent(clientEvent, null);
 		}
-		notifyAfterEventSent(clientEvent, exception);
-		if (exception != null && logger.isDebugEnabled()) {
-			logger.debug("Synchronous send failed for client " + clientEvent.getClient().getId(), exception);
+		case QUEUED -> {
+			// delivery is accounted asynchronously by the per-client buffer
+		}
+		case DROPPED -> notifyAfterEventDropped(clientEvent);
+		case FAILED -> {
+			notifyAfterEventSent(clientEvent, result.exception);
+			if (logger.isDebugEnabled()) {
+				logger.debug("Synchronous send failed for client " + clientEvent.getClient().getId(), result.exception);
+			}
+		}
 		}
 	}
 
@@ -719,6 +775,15 @@ public class SseEventBus {
 		}
 		catch (Exception e) {
 			logger.error("calling afterEventSent hook failed", e);
+		}
+	}
+
+	private void notifyAfterEventDropped(ClientEvent clientEvent) {
+		try {
+			this.listener.afterEventDropped(clientEvent);
+		}
+		catch (Exception ex) {
+			logger.error("calling afterEventDropped hook failed", ex);
 		}
 	}
 
@@ -780,14 +845,19 @@ public class SseEventBus {
 				}
 				if (clientEvent.getErrorCounter() < this.noOfSendResponseTries) {
 					Client client = clientEvent.getClient();
-					@Nullable Exception e = sendEventToClient(clientEvent);
-					if (e == null) {
+					SendResult result = sendEventToClient(clientEvent);
+					switch (result.outcome) {
+					case SENT -> {
 						client.updateLastTransfer();
 						notifyAfterEventSent(clientEvent, null);
 					}
-					else {
+					case QUEUED -> {
+						// delivery is accounted asynchronously by the per-client buffer
+					}
+					case DROPPED -> notifyAfterEventDropped(clientEvent);
+					case FAILED -> {
 						clientEvent.incErrorCounter();
-						notifyAfterEventSent(clientEvent, e);
+						notifyAfterEventSent(clientEvent, result.exception);
 						if (clientEvent.getErrorCounter() >= this.noOfSendResponseTries) {
 							String clientId = client.getId();
 							unregisterClient(clientId);
@@ -796,6 +866,7 @@ public class SseEventBus {
 						else {
 							offerRetry(clientEvent);
 						}
+					}
 					}
 				}
 				else {
@@ -813,7 +884,7 @@ public class SseEventBus {
 		}
 	}
 
-	private @Nullable Exception sendEventToClient(ClientEvent clientEvent) {
+	private SendResult sendEventToClient(ClientEvent clientEvent) {
 		SseEventBusObservationContext observationContext = createObservationContext(Operation.SEND_EVENT);
 		observationContext.setClientId(clientEvent.getClient().getId());
 		observationContext.setEventName(clientEvent.getSseEvent().event());
@@ -825,37 +896,171 @@ public class SseEventBus {
 		Observation observation = startObservation(observationContext);
 		try (Observation.Scope ignored = observation.openScope()) {
 			useObservationScope(ignored);
-			@Nullable Exception exception = doSendEventToClient(clientEvent);
-			observationContext.setOutcome(exception == null ? "success" : "error");
-			if (exception != null) {
-				observation.error(exception);
+			SendResult result = doSendEventToClient(clientEvent);
+			switch (result.outcome) {
+			case SENT -> observationContext.setOutcome("success");
+			case QUEUED -> observationContext.setOutcome("queued");
+			case DROPPED -> observationContext.setOutcome("dropped");
+			case FAILED -> {
+				observationContext.setOutcome("error");
+				Exception exception = result.exception;
+				if (exception != null) {
+					observation.error(exception);
+				}
 			}
-			return exception;
+			}
+			return result;
 		}
 		finally {
 			observation.stop();
 		}
 	}
 
-	private static @Nullable Exception doSendEventToClient(ClientEvent clientEvent) {
+	/**
+	 * Outcome of a single event delivery attempt.
+	 */
+	private enum SendOutcome {
+
+		/**
+		 * The event was written to the connection.
+		 */
+		SENT,
+
+		/**
+		 * The event was enqueued into a per-client send buffer; delivery is reported
+		 * asynchronously by the buffer's dispatcher thread.
+		 */
+		QUEUED,
+
+		/**
+		 * The event was dropped because the client's send buffer was full
+		 * ({@link OverflowPolicy#DROP}).
+		 */
+		DROPPED,
+
+		/**
+		 * Delivery failed.
+		 */
+		FAILED
+
+	}
+
+	/**
+	 * Result of a delivery attempt.
+	 */
+	private static final class SendResult {
+
+		private final SendOutcome outcome;
+
+		private final @Nullable Exception exception;
+
+		private SendResult(SendOutcome outcome, @Nullable Exception exception) {
+			this.outcome = outcome;
+			this.exception = exception;
+		}
+
+		static SendResult sent() {
+			return new SendResult(SendOutcome.SENT, null);
+		}
+
+		static SendResult queued() {
+			return new SendResult(SendOutcome.QUEUED, null);
+		}
+
+		static SendResult dropped() {
+			return new SendResult(SendOutcome.DROPPED, null);
+		}
+
+		static SendResult failed(Exception exception) {
+			return new SendResult(SendOutcome.FAILED, exception);
+		}
+
+	}
+
+	private static SendResult doSendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
 			SseEmitter emitter;
 			boolean completeAfterMessage;
+			ClientSendBuffer sendBuffer;
 			synchronized (client) {
 				emitter = client.sseEmitter();
 				completeAfterMessage = client.isCompleteAfterMessage();
+				sendBuffer = client.sendBuffer();
+			}
+			if (sendBuffer != null) {
+				// per-client bounded buffer: the dedicated dispatcher thread writes the
+				// event to the emitter, delivery is accounted asynchronously
+				return switch (sendBuffer.offer(clientEvent)) {
+				case ACCEPTED -> SendResult.queued();
+				case DROPPED -> SendResult.dropped();
+				case DISCONNECTED, CLOSED -> SendResult.failed(new java.io.IOException("client send buffer closed"));
+				};
 			}
 			emitter.send(clientEvent.createSseEventBuilder());
 			if (completeAfterMessage) {
 				emitter.complete();
 			}
-			return null;
+			return SendResult.sent();
 		}
 		catch (java.io.IOException | RuntimeException e) {
-			return e;
+			return SendResult.failed(e);
 		}
 
+	}
+
+	private void setupClientSendBuffer(Client client) {
+		closeClientSendBuffer(client);
+		int capacity = this.clientSendBufferCapacity;
+		if (capacity > 0) {
+			ClientSendBuffer buffer = new ClientSendBuffer(client.getId(), capacity, this.overflowPolicy,
+					builder -> {
+						SseEmitter emitter = client.sseEmitter();
+						emitter.send(builder);
+						if (client.isCompleteAfterMessage()) {
+							emitter.complete();
+						}
+					}, new ClientSendBuffer.DeliveryListener() {
+						@Override
+						public void delivered(ClientEvent event) {
+							client.updateLastTransfer();
+							notifyAfterEventSent(event, null);
+						}
+
+						@Override
+						public void failed(ClientEvent event, Exception exception) {
+							notifyAfterEventSent(event, exception);
+						}
+					}, () -> unregisterClient(client.getId()), this.slowClientListener, this.backpressureMetrics);
+			// Register the queue gauge before the buffer becomes visible to the send
+			// workers to avoid a registration race with an early disconnect
+			if (this.backpressureMetrics != null) {
+				this.backpressureMetrics.registerQueueGauge(client.getId(), buffer::queueSize);
+			}
+			client.updateSendBuffer(buffer);
+			buffer.start();
+		}
+	}
+
+	private void closeClientSendBuffer(Client client) {
+		ClientSendBuffer buffer = client.sendBuffer();
+		if (buffer != null) {
+			buffer.close();
+			client.updateSendBuffer(null);
+			if (this.backpressureMetrics != null) {
+				this.backpressureMetrics.removeQueueGauge(client.getId());
+			}
+		}
+	}
+
+	private int countSendBuffers() {
+		int count = 0;
+		for (Client client : this.clients.values()) {
+			if (client.sendBuffer() != null) {
+				count++;
+			}
+		}
+		return count;
 	}
 
 	private @Nullable String convertObject(SseEvent event) {
@@ -889,6 +1094,7 @@ public class SseEventBus {
 				this.clients.computeIfPresent(clientId, (id, client) -> {
 					if (client.lastTransfer() < recheckExpiration) {
 						removedEmitter.set(client.sseEmitter());
+						closeClientSendBuffer(client);
 						this.subscriptionRegistry.unsubscribeAll(id);
 						removePendingEvents(id);
 						clearReplayEvents(id);
