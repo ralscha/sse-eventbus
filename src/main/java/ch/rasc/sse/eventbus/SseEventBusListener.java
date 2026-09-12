@@ -45,9 +45,10 @@ public interface SseEventBusListener {
 	}
 
 	/**
-	 * Called when a failed event cannot be retained because the retry queue is full. The
-	 * event will not be retried; replay history, when enabled, is retained.
-	 * @param clientEvent the event dropped from retry delivery
+	 * Called when an event cannot be retained because the retry queue is full or the
+	 * per-client send buffer is full or closed. The event will not be retried. Replay
+	 * history, when enabled, is retained unless the client is unregistered.
+	 * @param clientEvent the dropped event
 	 */
 	default void afterEventDropped(ClientEvent clientEvent) {
 		// no default implementation

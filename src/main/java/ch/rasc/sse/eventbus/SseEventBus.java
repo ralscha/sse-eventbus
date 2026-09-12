@@ -453,21 +453,19 @@ public class SseEventBus {
 			AtomicReference<SseEmitter> oldEmitter = new AtomicReference<>();
 			this.clients.compute(clientId, (id, existing) -> {
 				if (existing == null) {
-					return new Client(id, emitter, completeAfterMessage);
+					Client client = new Client(id, emitter, completeAfterMessage);
+					setupClientSendBuffer(client);
+					return client;
 				}
 				synchronized (existing) {
+					closeClientSendBuffer(existing);
 					oldEmitter.set(existing.sseEmitter());
 					existing.updateEmitter(emitter);
 					existing.updateCompleteAfterMessage(completeAfterMessage);
 					existing.updateLastTransfer();
+					setupClientSendBuffer(existing);
 				}
 				return existing;
-			});
-			// Setup the send buffer under the same atomic map operation so a concurrent
-			// unregister cannot detach the client between the map update and the setup
-			this.clients.computeIfPresent(clientId, (id, client) -> {
-				setupClientSendBuffer(client);
-				return client;
 			});
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
@@ -517,6 +515,10 @@ public class SseEventBus {
 	 * @param clientId unique client identifier
 	 */
 	public void unregisterClient(String clientId) {
+		unregisterClient(clientId, null);
+	}
+
+	private void unregisterClient(String clientId, @Nullable ClientSendBuffer expectedBuffer) {
 		SseEventBusObservationContext observationContext = createObservationContext(Operation.UNREGISTER_CLIENT);
 		observationContext.setClientId(clientId);
 		Observation observation = startObservation(observationContext);
@@ -524,6 +526,9 @@ public class SseEventBus {
 			useObservationScope(ignored);
 			AtomicReference<SseEmitter> removedEmitter = new AtomicReference<>();
 			this.clients.compute(clientId, (id, client) -> {
+				if (expectedBuffer != null && (client == null || client.sendBuffer() != expectedBuffer)) {
+					return client;
+				}
 				if (client != null) {
 					removedEmitter.set(client.sseEmitter());
 					closeClientSendBuffer(client);
@@ -743,20 +748,21 @@ public class SseEventBus {
 		notifyAfterEventQueued(clientEvent, firstAttempt);
 		SendResult result = sendEventToClient(clientEvent);
 		switch (result.outcome) {
-		case SENT -> {
-			clientEvent.getClient().updateLastTransfer();
-			notifyAfterEventSent(clientEvent, null);
-		}
-		case QUEUED -> {
-			// delivery is accounted asynchronously by the per-client buffer
-		}
-		case DROPPED -> notifyAfterEventDropped(clientEvent);
-		case FAILED -> {
-			notifyAfterEventSent(clientEvent, result.exception);
-			if (logger.isDebugEnabled()) {
-				logger.debug("Synchronous send failed for client " + clientEvent.getClient().getId(), result.exception);
+			case SENT -> {
+				clientEvent.getClient().updateLastTransfer();
+				notifyAfterEventSent(clientEvent, null);
 			}
-		}
+			case QUEUED -> {
+				// delivery is accounted asynchronously by the per-client buffer
+			}
+			case DROPPED -> notifyAfterEventDropped(clientEvent);
+			case FAILED -> {
+				notifyAfterEventSent(clientEvent, result.exception);
+				if (logger.isDebugEnabled()) {
+					logger.debug("Synchronous send failed for client " + clientEvent.getClient().getId(),
+							result.exception);
+				}
+			}
 		}
 	}
 
@@ -847,26 +853,27 @@ public class SseEventBus {
 					Client client = clientEvent.getClient();
 					SendResult result = sendEventToClient(clientEvent);
 					switch (result.outcome) {
-					case SENT -> {
-						client.updateLastTransfer();
-						notifyAfterEventSent(clientEvent, null);
-					}
-					case QUEUED -> {
-						// delivery is accounted asynchronously by the per-client buffer
-					}
-					case DROPPED -> notifyAfterEventDropped(clientEvent);
-					case FAILED -> {
-						clientEvent.incErrorCounter();
-						notifyAfterEventSent(clientEvent, result.exception);
-						if (clientEvent.getErrorCounter() >= this.noOfSendResponseTries) {
-							String clientId = client.getId();
-							unregisterClient(clientId);
-							notifyAfterClientsUnregistered(Collections.singleton(clientId));
+						case SENT -> {
+							client.updateLastTransfer();
+							notifyAfterEventSent(clientEvent, null);
 						}
-						else {
-							offerRetry(clientEvent);
+						case QUEUED -> {
+							// delivery is accounted asynchronously by the per-client
+							// buffer
 						}
-					}
+						case DROPPED -> notifyAfterEventDropped(clientEvent);
+						case FAILED -> {
+							clientEvent.incErrorCounter();
+							notifyAfterEventSent(clientEvent, result.exception);
+							if (clientEvent.getErrorCounter() >= this.noOfSendResponseTries) {
+								String clientId = client.getId();
+								unregisterClient(clientId);
+								notifyAfterClientsUnregistered(Collections.singleton(clientId));
+							}
+							else {
+								offerRetry(clientEvent);
+							}
+						}
 					}
 				}
 				else {
@@ -898,16 +905,16 @@ public class SseEventBus {
 			useObservationScope(ignored);
 			SendResult result = doSendEventToClient(clientEvent);
 			switch (result.outcome) {
-			case SENT -> observationContext.setOutcome("success");
-			case QUEUED -> observationContext.setOutcome("queued");
-			case DROPPED -> observationContext.setOutcome("dropped");
-			case FAILED -> {
-				observationContext.setOutcome("error");
-				Exception exception = result.exception;
-				if (exception != null) {
-					observation.error(exception);
+				case SENT -> observationContext.setOutcome("success");
+				case QUEUED -> observationContext.setOutcome("queued");
+				case DROPPED -> observationContext.setOutcome("dropped");
+				case FAILED -> {
+					observationContext.setOutcome("error");
+					Exception exception = result.exception;
+					if (exception != null) {
+						observation.error(exception);
+					}
 				}
-			}
 			}
 			return result;
 		}
@@ -933,8 +940,7 @@ public class SseEventBus {
 		QUEUED,
 
 		/**
-		 * The event was dropped because the client's send buffer was full
-		 * ({@link OverflowPolicy#DROP}).
+		 * The event was dropped because the client's send buffer was full or closed.
 		 */
 		DROPPED,
 
@@ -977,7 +983,7 @@ public class SseEventBus {
 
 	}
 
-	private static SendResult doSendEventToClient(ClientEvent clientEvent) {
+	private SendResult doSendEventToClient(ClientEvent clientEvent) {
 		Client client = clientEvent.getClient();
 		try {
 			SseEmitter emitter;
@@ -992,10 +998,15 @@ public class SseEventBus {
 				// per-client bounded buffer: the dedicated dispatcher thread writes the
 				// event to the emitter, delivery is accounted asynchronously
 				return switch (sendBuffer.offer(clientEvent)) {
-				case ACCEPTED -> SendResult.queued();
-				case DROPPED -> SendResult.dropped();
-				case DISCONNECTED, CLOSED -> SendResult.failed(new java.io.IOException("client send buffer closed"));
+					case ACCEPTED -> SendResult.queued();
+					case DROPPED -> SendResult.dropped();
+					// The buffer owns disconnection. Retrying or unregistering here could
+					// act on a replacement connection registered in the meantime.
+					case DISCONNECTED, CLOSED -> SendResult.dropped();
 				};
+			}
+			if (this.clientSendBufferCapacity > 0) {
+				return SendResult.dropped();
 			}
 			emitter.send(clientEvent.createSseEventBuilder());
 			if (completeAfterMessage) {
@@ -1013,11 +1024,12 @@ public class SseEventBus {
 		closeClientSendBuffer(client);
 		int capacity = this.clientSendBufferCapacity;
 		if (capacity > 0) {
+			SseEmitter emitter = client.sseEmitter();
+			boolean completeAfterMessage = client.isCompleteAfterMessage();
 			ClientSendBuffer buffer = new ClientSendBuffer(client.getId(), capacity, this.overflowPolicy,
-					builder -> {
-						SseEmitter emitter = client.sseEmitter();
+					(builder, heartbeat) -> {
 						emitter.send(builder);
-						if (client.isCompleteAfterMessage()) {
+						if (completeAfterMessage && !heartbeat) {
 							emitter.complete();
 						}
 					}, new ClientSendBuffer.DeliveryListener() {
@@ -1031,7 +1043,8 @@ public class SseEventBus {
 						public void failed(ClientEvent event, Exception exception) {
 							notifyAfterEventSent(event, exception);
 						}
-					}, () -> unregisterClient(client.getId()), this.slowClientListener, this.backpressureMetrics);
+					}, disconnectedBuffer -> unregisterClient(client.getId(), disconnectedBuffer),
+					this.slowClientListener, this.backpressureMetrics);
 			// Register the queue gauge before the buffer becomes visible to the send
 			// workers to avoid a registration race with an early disconnect
 			if (this.backpressureMetrics != null) {
@@ -1043,12 +1056,14 @@ public class SseEventBus {
 	}
 
 	private void closeClientSendBuffer(Client client) {
-		ClientSendBuffer buffer = client.sendBuffer();
-		if (buffer != null) {
-			buffer.close();
-			client.updateSendBuffer(null);
-			if (this.backpressureMetrics != null) {
-				this.backpressureMetrics.removeQueueGauge(client.getId());
+		synchronized (client) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.close();
+				client.updateSendBuffer(null);
+				if (this.backpressureMetrics != null) {
+					this.backpressureMetrics.removeQueueGauge(client.getId());
+				}
 			}
 		}
 	}
@@ -1285,6 +1300,13 @@ public class SseEventBus {
 	private void sendHeartbeat() {
 		for (Client client : this.clients.values()) {
 			try {
+				if (this.clientSendBufferCapacity > 0) {
+					ClientSendBuffer buffer = client.sendBuffer();
+					if (buffer != null) {
+						buffer.offerHeartbeat(client, this.heartbeatComment);
+					}
+					continue;
+				}
 				client.sseEmitter().send(SseEmitter.event().comment(this.heartbeatComment));
 				client.updateLastTransfer();
 			}
@@ -1339,6 +1361,13 @@ public class SseEventBus {
 	}
 
 	private void removePendingReplayableEvents(String clientId) {
+		Client client = this.clients.get(clientId);
+		if (client != null) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.removePendingReplayableEvents();
+			}
+		}
 		this.sendQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)
 				&& clientEvent.getSseEvent().id().filter(id -> !id.isEmpty()).isPresent());
 		this.errorQueue.removeIf(clientEvent -> clientEvent.getClient().getId().equals(clientId)

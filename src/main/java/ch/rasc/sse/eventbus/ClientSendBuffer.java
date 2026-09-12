@@ -21,9 +21,12 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.jspecify.annotations.Nullable;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
+
+import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 
 /**
  * Bounded per-client send buffer with a dedicated dispatcher thread.
@@ -44,9 +47,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEvent
  * recorded when configured.
  * <p>
  * Delivery accounting happens on the dispatcher thread: {@link DeliveryListener} is
- * invoked after the event was actually written to the {@code SseEmitter} (or after a
- * send failure), so an enqueued event is never reported as delivered before the sink
- * has run.
+ * invoked after the event was actually written to the {@code SseEmitter} (or after a send
+ * failure), so an enqueued event is never reported as delivered before the sink has run.
  */
 final class ClientSendBuffer implements AutoCloseable {
 
@@ -61,8 +63,8 @@ final class ClientSendBuffer implements AutoCloseable {
 		ACCEPTED,
 
 		/**
-		 * The queue was full and the event was dropped by the
-		 * {@link OverflowPolicy#DROP} policy.
+		 * The queue was full and the event was dropped by the {@link OverflowPolicy#DROP}
+		 * policy.
 		 */
 		DROPPED,
 
@@ -85,7 +87,7 @@ final class ClientSendBuffer implements AutoCloseable {
 	@FunctionalInterface
 	interface EventSink {
 
-		void send(SseEventBuilder event) throws IOException;
+		void send(SseEventBuilder event, boolean heartbeat) throws IOException;
 
 	}
 
@@ -115,13 +117,16 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private final OverflowPolicy overflowPolicy;
 
-	private final BlockingQueue<ClientEvent> queue;
+	private record BufferedEvent(ClientEvent event, boolean heartbeat) {
+	}
+
+	private final BlockingQueue<BufferedEvent> queue;
 
 	private final EventSink sink;
 
 	private final DeliveryListener deliveryListener;
 
-	private final @Nullable Runnable onDisconnect;
+	private final @Nullable Consumer<ClientSendBuffer> onDisconnect;
 
 	private final @Nullable SlowClientListener listener;
 
@@ -136,8 +141,8 @@ final class ClientSendBuffer implements AutoCloseable {
 	private volatile @Nullable Thread dispatcherThread;
 
 	ClientSendBuffer(String clientId, int capacity, OverflowPolicy overflowPolicy, EventSink sink,
-			DeliveryListener deliveryListener, @Nullable Runnable onDisconnect, @Nullable SlowClientListener listener,
-			@Nullable SseBackpressureMetrics metrics) {
+			DeliveryListener deliveryListener, @Nullable Consumer<ClientSendBuffer> onDisconnect,
+			@Nullable SlowClientListener listener, @Nullable SseBackpressureMetrics metrics) {
 		this.clientId = Objects.requireNonNull(clientId, "clientId");
 		if (capacity <= 0) {
 			throw new IllegalArgumentException("clientSendBufferCapacity must be > 0");
@@ -155,7 +160,7 @@ final class ClientSendBuffer implements AutoCloseable {
 	/**
 	 * Starts the dedicated dispatcher thread. Idempotent.
 	 */
-	void start() {
+	synchronized void start() {
 		if (this.closed.get() || this.dispatcherThread != null) {
 			return;
 		}
@@ -171,44 +176,48 @@ final class ClientSendBuffer implements AutoCloseable {
 	 * @return the result of the enqueue attempt
 	 */
 	OfferResult offer(ClientEvent event) {
-		if (this.closed.get()) {
-			return OfferResult.CLOSED;
-		}
-		if (this.queue.offer(event)) {
-			return OfferResult.ACCEPTED;
-		}
-		int queueSize = this.queue.size();
-		if (this.metrics != null) {
-			this.metrics.recordOverflow(this.clientId);
-		}
-		switch (this.overflowPolicy) {
-		case DROP -> {
-			if (this.metrics != null) {
-				this.metrics.recordDropped(this.clientId);
+		return offer(new BufferedEvent(event, false));
+	}
+
+	void offerHeartbeat(Client client, String comment) {
+		offer(new BufferedEvent(new ClientEvent(client, SseEvent.builder().comment(comment).build(), null), true));
+	}
+
+	private OfferResult offer(BufferedEvent event) {
+		synchronized (this) {
+			if (this.closed.get() || this.draining.get()) {
+				return OfferResult.CLOSED;
 			}
-			// Notify on the dispatcher thread so a slow listener cannot block the
-			// shared send worker (head-of-line blocking)
-			setPendingNotification(SlowClientEvent.of(this.clientId, this.overflowPolicy, queueSize, this.capacity,
-					"send buffer full, new event dropped"));
-			return OfferResult.DROPPED;
-		}
-		case DISCONNECT -> {
+			if (this.queue.offer(event)) {
+				return OfferResult.ACCEPTED;
+			}
+			if (this.metrics != null) {
+				this.metrics.recordOverflow(this.clientId);
+			}
+			// The failed offer observed a full queue, even if the dispatcher has since
+			// removed an event.
+			if (this.overflowPolicy == OverflowPolicy.DROP) {
+				if (this.metrics != null) {
+					this.metrics.recordDropped(this.clientId);
+				}
+				this.pendingNotification = SlowClientEvent.of(this.clientId, this.overflowPolicy, this.capacity,
+						this.capacity, "send buffer full, new event dropped");
+				return OfferResult.DROPPED;
+			}
 			if (this.metrics != null) {
 				this.metrics.recordDisconnected(this.clientId);
 			}
-			setPendingNotification(SlowClientEvent.of(this.clientId, this.overflowPolicy, queueSize, this.capacity,
-					"send buffer full, slow client disconnected"));
-			closeAndNotifyDisconnect();
-			return OfferResult.DISCONNECTED;
+			this.pendingNotification = SlowClientEvent.of(this.clientId, this.overflowPolicy, this.capacity,
+					this.capacity, "send buffer full, slow client disconnected");
+			close();
 		}
-		default -> throw new IllegalStateException("Unsupported overflow policy: " + this.overflowPolicy);
-		}
-	}
-
-	private void setPendingNotification(SlowClientEvent slowClientEvent) {
-		synchronized (this) {
-			this.pendingNotification = slowClientEvent;
-		}
+		// Completing an emitter and invoking application callbacks can both block.
+		// Run this once per disconnected buffer, independently of its blocked sink.
+		Thread notificationThread = new Thread(this::notifyDisconnectAndSlowClient,
+				"sse-client-disconnect-" + this.clientId);
+		notificationThread.setDaemon(true);
+		notificationThread.start();
+		return OfferResult.DISCONNECTED;
 	}
 
 	private @Nullable SlowClientEvent takePendingNotification() {
@@ -236,19 +245,21 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private void dispatchLoop() {
 		try {
-			while (!Thread.currentThread().isInterrupted()) {
+			while (!this.closed.get() && !Thread.currentThread().isInterrupted()) {
 				SlowClientEvent pending = takePendingNotification();
 				if (pending != null) {
 					notifyListener(pending);
 				}
-				ClientEvent event = this.queue.poll(200, TimeUnit.MILLISECONDS);
+				BufferedEvent event = this.queue.poll(200, TimeUnit.MILLISECONDS);
 				if (event == null) {
 					if (this.closed.get() || this.draining.get()) {
 						break;
 					}
 					continue;
 				}
-				deliver(event);
+				if (!this.closed.get()) {
+					deliver(event);
+				}
 			}
 		}
 		catch (InterruptedException ie) {
@@ -256,30 +267,47 @@ final class ClientSendBuffer implements AutoCloseable {
 		}
 	}
 
-	private void deliver(ClientEvent event) {
+	private void deliver(BufferedEvent bufferedEvent) {
+		ClientEvent event = bufferedEvent.event();
 		try {
-			this.sink.send(event.createSseEventBuilder());
-			this.deliveryListener.delivered(event);
+			SseEventBuilder builder = event.createSseEventBuilder();
+			if (this.closed.get()) {
+				return;
+			}
+			this.sink.send(builder, bufferedEvent.heartbeat());
 		}
 		catch (Exception ex) {
-			this.deliveryListener.failed(event, ex);
-			closeAndNotifyDisconnect();
+			try {
+				if (!bufferedEvent.heartbeat()) {
+					this.deliveryListener.failed(event, ex);
+				}
+			}
+			finally {
+				closeAndNotifyDisconnect();
+			}
+			return;
+		}
+		if (bufferedEvent.heartbeat()) {
+			event.getClient().updateLastTransfer();
+		}
+		else {
+			this.deliveryListener.delivered(event);
 		}
 	}
 
 	/**
 	 * Starts draining: the dispatcher thread keeps delivering already queued events and
-	 * exits once the queue is empty. Idempotent. Call {@link #awaitDrained(long)} to
-	 * wait for the dispatcher to finish.
+	 * exits once the queue is empty. Idempotent. Call {@link #awaitDrained(long)} to wait
+	 * for the dispatcher to finish.
 	 */
-	void startDraining() {
+	synchronized void startDraining() {
 		this.draining.set(true);
 	}
 
 	/**
-	 * Waits until the dispatcher thread has exited (queue drained), or until the
-	 * deadline elapses. A timed-out dispatcher is interrupted so the buffer can be
-	 * closed without losing control.
+	 * Waits until the dispatcher thread has exited (queue drained), or until the deadline
+	 * elapses. A timed-out dispatcher is interrupted so the buffer can be closed without
+	 * losing control.
 	 * @param deadlineNanos absolute deadline in nanoseconds
 	 */
 	void awaitDrained(long deadlineNanos) {
@@ -302,8 +330,8 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	/**
 	 * Starts draining and waits until the dispatcher thread has delivered all currently
-	 * queued events, or until the timeout elapses. After this method returns the buffer
-	 * can be closed without losing events.
+	 * queued events, or until the timeout elapses. Events still pending after a timeout
+	 * are discarded when the buffer is closed.
 	 * @param timeoutMillis maximum time to wait for the queue to drain
 	 */
 	void drain(long timeoutMillis) {
@@ -313,36 +341,40 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	/**
 	 * Closes the buffer without firing the disconnect callback and without draining the
-	 * queue. Used when the client is re-registered or unregistered through the regular
-	 * lifecycle.
+	 * queue. Pending events are discarded. Used when the client is re-registered or
+	 * unregistered through the regular lifecycle.
 	 */
 	@Override
-	public void close() {
+	public synchronized void close() {
 		if (this.closed.compareAndSet(false, true)) {
+			this.queue.clear();
 			interruptDispatcher();
 		}
 	}
 
 	private void closeAndNotifyDisconnect() {
-		if (this.closed.compareAndSet(false, true)) {
-			// Deliver a pending slow-client notification that the dispatcher thread may no
-			// longer have a chance to process after being interrupted. Synchronous
-			// delivery here is acceptable because this path runs once per disconnected
-			// client, not on every overflow.
-			SlowClientEvent pending = takePendingNotification();
-			if (pending != null) {
-				notifyListener(pending);
+		synchronized (this) {
+			if (this.closed.get()) {
+				return;
 			}
-			interruptDispatcher();
-			Runnable disconnect = this.onDisconnect;
-			if (disconnect != null) {
-				try {
-					disconnect.run();
-				}
-				catch (RuntimeException ex) {
-					// ignore disconnect callback failures
-				}
+			close();
+		}
+		notifyDisconnectAndSlowClient();
+	}
+
+	private void notifyDisconnectAndSlowClient() {
+		Consumer<ClientSendBuffer> disconnect = this.onDisconnect;
+		if (disconnect != null) {
+			try {
+				disconnect.accept(this);
 			}
+			catch (RuntimeException ex) {
+				// ignore disconnect callback failures
+			}
+		}
+		SlowClientEvent pending = takePendingNotification();
+		if (pending != null) {
+			notifyListener(pending);
 		}
 	}
 
@@ -355,6 +387,11 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	int queueSize() {
 		return this.queue.size();
+	}
+
+	void removePendingReplayableEvents() {
+		this.queue.removeIf(
+				bufferedEvent -> bufferedEvent.event().getSseEvent().id().filter(id -> !id.isEmpty()).isPresent());
 	}
 
 	int capacity() {

@@ -16,11 +16,15 @@
 package ch.rasc.sse.eventbus;
 
 /**
- * Callback for slow client events. Invoked when a client's bounded send buffer is
- * full, either because events were dropped or the client was disconnected.
+ * Callback for slow client events. Invoked when a client's bounded send buffer is full,
+ * either because events were dropped or the client was disconnected.
  * <p>
  * Applications can use this to degrade event frequency for the affected client, send
  * alerts, or throttle publishing.
+ * <p>
+ * Callbacks run on a per-client dispatcher or disconnect thread. Repeated drop
+ * notifications may be coalesced while the dispatcher is busy; overflow metrics still
+ * count every rejected event. Callbacks for different clients may run concurrently.
  */
 @FunctionalInterface
 public interface SlowClientListener {
