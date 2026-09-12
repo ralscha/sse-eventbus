@@ -142,13 +142,17 @@ class ClientSendBufferTest {
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 2, OverflowPolicy.DROP, builder -> {
 		}, noopDeliveryListener(), null, slowClientEvents::add, null);
 
+		// Fill the buffer while the dispatcher is not running to keep the queue size
+		// deterministic, then start it so the pending notification is delivered
 		assertThat(buffer.offer(clientEvent("c1", "1"))).isEqualTo(OfferResult.ACCEPTED);
 		assertThat(buffer.offer(clientEvent("c1", "2"))).isEqualTo(OfferResult.ACCEPTED);
 		assertThat(buffer.offer(clientEvent("c1", "3"))).isEqualTo(OfferResult.DROPPED);
 
 		assertThat(buffer.queueSize()).isEqualTo(2);
 		assertThat(buffer.isClosed()).isFalse();
-		assertThat(slowClientEvents).hasSize(1);
+
+		buffer.start();
+		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(slowClientEvents).hasSize(1));
 		SlowClientEvent slowClientEvent = slowClientEvents.get(0);
 		assertThat(slowClientEvent.clientId()).isEqualTo("c1");
 		assertThat(slowClientEvent.policy()).isEqualTo(OverflowPolicy.DROP);
@@ -223,7 +227,13 @@ class ClientSendBufferTest {
 
 		assertThat(registry.get("sse.eventbus.client.buffer.overflow.total").counter().count()).isEqualTo(1);
 		assertThat(registry.get("sse.eventbus.client.buffer.dropped.events").counter().count()).isEqualTo(1);
-		assertThat(registry.get("sse.eventbus.client.buffer.slow.client.notifications").counter().count()).isEqualTo(1);
+
+		buffer.start();
+		await().atMost(Duration.ofSeconds(2))
+			.untilAsserted(() -> assertThat(
+					registry.get("sse.eventbus.client.buffer.slow.client.notifications").counter().count())
+				.isEqualTo(1));
+		buffer.close();
 	}
 
 }

@@ -131,6 +131,8 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private final AtomicBoolean draining = new AtomicBoolean();
 
+	private @Nullable SlowClientEvent pendingNotification;
+
 	private volatile @Nullable Thread dispatcherThread;
 
 	ClientSendBuffer(String clientId, int capacity, OverflowPolicy overflowPolicy, EventSink sink,
@@ -184,14 +186,18 @@ final class ClientSendBuffer implements AutoCloseable {
 			if (this.metrics != null) {
 				this.metrics.recordDropped(this.clientId);
 			}
-			notifySlowClient(queueSize, "send buffer full, new event dropped");
+			// Notify on the dispatcher thread so a slow listener cannot block the
+			// shared send worker (head-of-line blocking)
+			setPendingNotification(SlowClientEvent.of(this.clientId, this.overflowPolicy, queueSize, this.capacity,
+					"send buffer full, new event dropped"));
 			return OfferResult.DROPPED;
 		}
 		case DISCONNECT -> {
 			if (this.metrics != null) {
 				this.metrics.recordDisconnected(this.clientId);
 			}
-			notifySlowClient(queueSize, "send buffer full, slow client disconnected");
+			setPendingNotification(SlowClientEvent.of(this.clientId, this.overflowPolicy, queueSize, this.capacity,
+					"send buffer full, slow client disconnected"));
 			closeAndNotifyDisconnect();
 			return OfferResult.DISCONNECTED;
 		}
@@ -199,15 +205,28 @@ final class ClientSendBuffer implements AutoCloseable {
 		}
 	}
 
-	private void notifySlowClient(int queueSize, String detail) {
+	private void setPendingNotification(SlowClientEvent slowClientEvent) {
+		synchronized (this) {
+			this.pendingNotification = slowClientEvent;
+		}
+	}
+
+	private @Nullable SlowClientEvent takePendingNotification() {
+		synchronized (this) {
+			SlowClientEvent pending = this.pendingNotification;
+			this.pendingNotification = null;
+			return pending;
+		}
+	}
+
+	private void notifyListener(SlowClientEvent slowClientEvent) {
 		SlowClientListener slowClientListener = this.listener;
 		if (slowClientListener != null) {
 			if (this.metrics != null) {
 				this.metrics.recordNotification(this.clientId);
 			}
 			try {
-				slowClientListener.onSlowClient(
-						SlowClientEvent.of(this.clientId, this.overflowPolicy, queueSize, this.capacity, detail));
+				slowClientListener.onSlowClient(slowClientEvent);
 			}
 			catch (RuntimeException ex) {
 				// listener failures must not affect event delivery
@@ -218,6 +237,10 @@ final class ClientSendBuffer implements AutoCloseable {
 	private void dispatchLoop() {
 		try {
 			while (!Thread.currentThread().isInterrupted()) {
+				SlowClientEvent pending = takePendingNotification();
+				if (pending != null) {
+					notifyListener(pending);
+				}
 				ClientEvent event = this.queue.poll(200, TimeUnit.MILLISECONDS);
 				if (event == null) {
 					if (this.closed.get() || this.draining.get()) {
@@ -302,6 +325,14 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private void closeAndNotifyDisconnect() {
 		if (this.closed.compareAndSet(false, true)) {
+			// Deliver a pending slow-client notification that the dispatcher thread may no
+			// longer have a chance to process after being interrupted. Synchronous
+			// delivery here is acceptable because this path runs once per disconnected
+			// client, not on every overflow.
+			SlowClientEvent pending = takePendingNotification();
+			if (pending != null) {
+				notifyListener(pending);
+			}
 			interruptDispatcher();
 			Runnable disconnect = this.onDisconnect;
 			if (disconnect != null) {

@@ -278,28 +278,30 @@ public class SseEventBus {
 			if (!remaining.isEmpty()) {
 				logger.info("SseEventBus flushed " + remaining.size() + " pending events on shutdown");
 			}
-
-			// Gracefully deliver events already accepted into per-client send buffers,
-			// then close the buffers. Draining is started for all buffers in parallel
-			// and bounded by a single shared deadline.
-			for (Client client : this.clients.values()) {
-				ClientSendBuffer buffer = client.sendBuffer();
-				if (buffer != null) {
-					buffer.startDraining();
-				}
-			}
-			long drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-			for (Client client : this.clients.values()) {
-				ClientSendBuffer buffer = client.sendBuffer();
-				if (buffer != null) {
-					buffer.awaitDrained(drainDeadline);
-				}
-			}
-			for (Client client : this.clients.values()) {
-				closeClientSendBuffer(client);
-			}
-			logger.info("SseEventBus shut down");
 		}
+
+		// Gracefully deliver events already accepted into per-client send buffers, then
+		// close the buffers. Per-client buffers are also active in synchronous mode
+		// (taskScheduler == null), so this lifecycle must not be conditional on the
+		// scheduler. Draining is started for all buffers in parallel and bounded by a
+		// single shared deadline.
+		for (Client client : this.clients.values()) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.startDraining();
+			}
+		}
+		long drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+		for (Client client : this.clients.values()) {
+			ClientSendBuffer buffer = client.sendBuffer();
+			if (buffer != null) {
+				buffer.awaitDrained(drainDeadline);
+			}
+		}
+		for (Client client : this.clients.values()) {
+			closeClientSendBuffer(client);
+		}
+		logger.info("SseEventBus shut down");
 	}
 
 	/**
@@ -461,10 +463,12 @@ public class SseEventBus {
 				}
 				return existing;
 			});
-			Client client = this.clients.get(clientId);
-			if (client != null) {
+			// Setup the send buffer under the same atomic map operation so a concurrent
+			// unregister cannot detach the client between the map update and the setup
+			this.clients.computeIfPresent(clientId, (id, client) -> {
 				setupClientSendBuffer(client);
-			}
+				return client;
+			});
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
@@ -894,7 +898,8 @@ public class SseEventBus {
 			useObservationScope(ignored);
 			SendResult result = doSendEventToClient(clientEvent);
 			switch (result.outcome) {
-			case SENT, QUEUED -> observationContext.setOutcome("success");
+			case SENT -> observationContext.setOutcome("success");
+			case QUEUED -> observationContext.setOutcome("queued");
 			case DROPPED -> observationContext.setOutcome("dropped");
 			case FAILED -> {
 				observationContext.setOutcome("error");
