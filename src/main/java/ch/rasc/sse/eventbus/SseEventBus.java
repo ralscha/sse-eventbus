@@ -445,7 +445,9 @@ public class SseEventBus {
 				return existing;
 			});
 			Client client = this.clients.get(clientId);
-			setupClientSendBuffer(client);
+			if (client != null) {
+				setupClientSendBuffer(client);
+			}
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
