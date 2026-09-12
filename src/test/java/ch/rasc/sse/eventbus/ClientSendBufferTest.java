@@ -60,14 +60,25 @@ class ClientSendBufferTest {
 
 	@Test
 	void dispatchDeliversEventsInOrder() {
-		List<String> sent = new ArrayList<>();
-		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, builder -> sent.add(builder.toString()),
-				noopDeliveryListener(), null, null, null);
+		List<String> delivered = new ArrayList<>();
+		DeliveryListener listener = new DeliveryListener() {
+			@Override
+			public void delivered(ClientEvent event) {
+				delivered.add(String.valueOf(event.getSseEvent().data()));
+			}
+
+			@Override
+			public void failed(ClientEvent event, Exception exception) {
+				// nothing here
+			}
+		};
+		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, builder -> {
+		}, listener, null, null, null);
 		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
 		buffer.offer(clientEvent("c1", "3"));
-		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(sent).hasSize(3));
+		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1", "2", "3"));
 		buffer.close();
 	}
 

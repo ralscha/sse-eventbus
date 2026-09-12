@@ -280,11 +280,19 @@ public class SseEventBus {
 			}
 
 			// Gracefully deliver events already accepted into per-client send buffers,
-			// then close the buffers
+			// then close the buffers. Draining is started for all buffers in parallel
+			// and bounded by a single shared deadline.
 			for (Client client : this.clients.values()) {
 				ClientSendBuffer buffer = client.sendBuffer();
 				if (buffer != null) {
-					buffer.drain(1000);
+					buffer.startDraining();
+				}
+			}
+			long drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+			for (Client client : this.clients.values()) {
+				ClientSendBuffer buffer = client.sendBuffer();
+				if (buffer != null) {
+					buffer.awaitDrained(drainDeadline);
 				}
 			}
 			for (Client client : this.clients.values()) {

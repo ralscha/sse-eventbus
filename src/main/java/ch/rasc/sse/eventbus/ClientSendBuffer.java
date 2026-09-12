@@ -245,20 +245,27 @@ final class ClientSendBuffer implements AutoCloseable {
 	}
 
 	/**
-	 * Waits until the dispatcher thread has delivered all currently queued events, or
-	 * until the timeout elapses. After this method returns the buffer can be closed
-	 * without losing events. Idempotent.
-	 * @param timeoutMillis maximum time to wait for the queue to drain
+	 * Starts draining: the dispatcher thread keeps delivering already queued events and
+	 * exits once the queue is empty. Idempotent. Call {@link #awaitDrained(long)} to
+	 * wait for the dispatcher to finish.
 	 */
-	void drain(long timeoutMillis) {
+	void startDraining() {
 		this.draining.set(true);
+	}
+
+	/**
+	 * Waits until the dispatcher thread has exited (queue drained), or until the
+	 * deadline elapses. A timed-out dispatcher is interrupted so the buffer can be
+	 * closed without losing control.
+	 * @param deadlineNanos absolute deadline in nanoseconds
+	 */
+	void awaitDrained(long deadlineNanos) {
 		Thread thread = this.dispatcherThread;
 		if (thread == null || thread == Thread.currentThread()) {
 			return;
 		}
-		long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
 		try {
-			while (thread.isAlive() && System.nanoTime() < deadline) {
+			while (thread.isAlive() && System.nanoTime() < deadlineNanos) {
 				Thread.sleep(10);
 			}
 			if (thread.isAlive()) {
@@ -268,6 +275,17 @@ final class ClientSendBuffer implements AutoCloseable {
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	/**
+	 * Starts draining and waits until the dispatcher thread has delivered all currently
+	 * queued events, or until the timeout elapses. After this method returns the buffer
+	 * can be closed without losing events.
+	 * @param timeoutMillis maximum time to wait for the queue to drain
+	 */
+	void drain(long timeoutMillis) {
+		startDraining();
+		awaitDrained(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis));
 	}
 
 	/**
