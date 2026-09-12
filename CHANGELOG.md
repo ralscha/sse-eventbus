@@ -1,6 +1,13 @@
 # Changelog
 
-## 3.2.1 - Unreleased
+## 3.3.0 - September 12, 2026
+* Add optional bounded per-client send buffers with dedicated dispatchers and configurable `DROP` or `DISCONNECT` overflow policies
+* Add slow-client callbacks and Micrometer metrics for queue sizes, overflows, dropped events, and disconnected clients
+* Protect reconnects from stale sends and disconnect callbacks, and prevent closed or draining buffers from accepting new events
+* Drain accepted events with a shared shutdown deadline and keep blocking disconnect callbacks off shared send workers
+* Route heartbeats through client buffers and remove pending replayable events before replay
+
+## 3.2.1 - September 6, 2026
 * Keep both subscription indexes consistent during concurrent changes and return stable event snapshots
 * Make replay appends, reads, and cleanup atomic per client; purge expired events regardless of timestamp order
 * Add a configurable replay capacity (10,000 events per client by default), with oldest-first eviction
