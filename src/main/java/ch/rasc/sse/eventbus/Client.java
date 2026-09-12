@@ -15,6 +15,8 @@
  */
 package ch.rasc.sse.eventbus;
 
+import org.jspecify.annotations.Nullable;
+
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class Client {
@@ -26,6 +28,8 @@ public class Client {
 	private volatile long lastTransfer;
 
 	private volatile boolean completeAfterMessage;
+
+	private volatile @Nullable ClientSendBuffer sendBuffer;
 
 	Client(String id, SseEmitter sseEmitter, boolean completeAfterMessage) {
 		this.id = id;
@@ -60,6 +64,14 @@ public class Client {
 
 	boolean isCompleteAfterMessage() {
 		return this.completeAfterMessage;
+	}
+
+	@Nullable ClientSendBuffer sendBuffer() {
+		return this.sendBuffer;
+	}
+
+	void updateSendBuffer(@Nullable ClientSendBuffer sendBuffer) {
+		this.sendBuffer = sendBuffer;
 	}
 
 }

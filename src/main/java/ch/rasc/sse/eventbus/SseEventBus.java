@@ -43,6 +43,7 @@ import ch.rasc.sse.eventbus.observation.DefaultSseEventBusObservationConvention;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationContext.Operation;
 import ch.rasc.sse.eventbus.observation.SseEventBusObservationConvention;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PostConstruct;
@@ -99,6 +100,14 @@ public class SseEventBus {
 	private final boolean replayEnabled;
 
 	private final int sendWorkerCount;
+
+	private final int clientSendBufferCapacity;
+
+	private final OverflowPolicy overflowPolicy;
+
+	private final SlowClientListener slowClientListener;
+
+	private final @Nullable SseBackpressureMetrics backpressureMetrics;
 
 	private final @Nullable ReplayStore replayStore;
 
@@ -187,6 +196,14 @@ public class SseEventBus {
 		this.replayEnabled = replayStore != null;
 		this.replayRetention = configurer.replayRetention();
 		this.replayCleanupJobDelay = configurer.replayCleanupJobDelay();
+		this.clientSendBufferCapacity = configurer.clientSendBufferCapacity();
+		this.overflowPolicy = configurer.overflowPolicy();
+		this.slowClientListener = configurer.slowClientListener();
+		MeterRegistry meterRegistry = configurer.meterRegistry();
+		this.backpressureMetrics = meterRegistry != null ? new SseBackpressureMetrics(meterRegistry) : null;
+		if (this.backpressureMetrics != null) {
+			this.backpressureMetrics.registerActiveClientsGauge(this::countSendBuffers);
+		}
 		this.observationRegistry = observationRegistry != null ? observationRegistry : ObservationRegistry.NOOP;
 		this.observationConvention = observationConvention != null ? observationConvention
 				: DEFAULT_OBSERVATION_CONVENTION;
@@ -244,6 +261,10 @@ public class SseEventBus {
 			}
 			catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
+			}
+
+			for (Client client : this.clients.values()) {
+				closeClientSendBuffer(client);
 			}
 
 			// Flush remaining events after the event loop has stopped
@@ -423,6 +444,8 @@ public class SseEventBus {
 				}
 				return existing;
 			});
+			Client client = this.clients.get(clientId);
+			setupClientSendBuffer(client);
 			if (this.replayEnabled) {
 				this.replayLocks.computeIfAbsent(clientId, k -> new ReentrantLock());
 			}
@@ -480,6 +503,7 @@ public class SseEventBus {
 			this.clients.compute(clientId, (id, client) -> {
 				if (client != null) {
 					removedEmitter.set(client.sseEmitter());
+					closeClientSendBuffer(client);
 				}
 				this.subscriptionRegistry.unsubscribeAll(id);
 				removePendingEvents(id);
@@ -842,9 +866,17 @@ public class SseEventBus {
 		try {
 			SseEmitter emitter;
 			boolean completeAfterMessage;
+			ClientSendBuffer sendBuffer;
 			synchronized (client) {
 				emitter = client.sseEmitter();
 				completeAfterMessage = client.isCompleteAfterMessage();
+				sendBuffer = client.sendBuffer();
+			}
+			if (sendBuffer != null) {
+				// per-client bounded buffer: the dedicated dispatcher thread writes the
+				// event to the emitter, overflow is handled by the configured policy
+				sendBuffer.offer(clientEvent.createSseEventBuilder());
+				return null;
 			}
 			emitter.send(clientEvent.createSseEventBuilder());
 			if (completeAfterMessage) {
@@ -856,6 +888,47 @@ public class SseEventBus {
 			return e;
 		}
 
+	}
+
+	private void setupClientSendBuffer(Client client) {
+		closeClientSendBuffer(client);
+		int capacity = this.clientSendBufferCapacity;
+		if (capacity > 0) {
+			ClientSendBuffer buffer = new ClientSendBuffer(client.getId(), capacity, this.overflowPolicy,
+					builder -> {
+						SseEmitter emitter = client.sseEmitter();
+						emitter.send(builder);
+						if (client.isCompleteAfterMessage()) {
+							emitter.complete();
+						}
+					}, () -> unregisterClient(client.getId()), this.slowClientListener, this.backpressureMetrics);
+			client.updateSendBuffer(buffer);
+			buffer.start();
+			if (this.backpressureMetrics != null) {
+				this.backpressureMetrics.registerQueueGauge(client.getId(), buffer::queueSize);
+			}
+		}
+	}
+
+	private void closeClientSendBuffer(Client client) {
+		ClientSendBuffer buffer = client.sendBuffer();
+		if (buffer != null) {
+			buffer.close();
+			client.updateSendBuffer(null);
+			if (this.backpressureMetrics != null) {
+				this.backpressureMetrics.removeQueueGauge(client.getId());
+			}
+		}
+	}
+
+	private int countSendBuffers() {
+		int count = 0;
+		for (Client client : this.clients.values()) {
+			if (client.sendBuffer() != null) {
+				count++;
+			}
+		}
+		return count;
 	}
 
 	private @Nullable String convertObject(SseEvent event) {
@@ -889,6 +962,7 @@ public class SseEventBus {
 				this.clients.computeIfPresent(clientId, (id, client) -> {
 					if (client.lastTransfer() < recheckExpiration) {
 						removedEmitter.set(client.sseEmitter());
+						closeClientSendBuffer(client);
 						this.subscriptionRegistry.unsubscribeAll(id);
 						removePendingEvents(id);
 						clearReplayEvents(id);
