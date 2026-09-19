@@ -117,8 +117,11 @@ class SseEventBusBackpressureCoalesceTest {
 			.untilAsserted(() -> assertThat(
 					REGISTRY.get("sse.eventbus.client.buffer.coalesced.events").counter().count())
 				.isGreaterThan(0));
-		// far fewer writes than published events, and at least one write happened
-		await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(SENT_NOTIFICATIONS.get()).isGreaterThan(0));
+		// wait until the whole batch has been delivered (queue drained) before
+		// comparing the number of writes against the number of published events
+		await().atMost(Duration.ofSeconds(5)).untilAsserted(
+				() -> assertThat(REGISTRY.get("sse.eventbus.client.buffer.queue.size").gauge().value()).isZero());
+		assertThat(SENT_NOTIFICATIONS.get()).isGreaterThan(0);
 		assertThat(SENT_NOTIFICATIONS.get()).isLessThan(50);
 
 		// the client stays connected

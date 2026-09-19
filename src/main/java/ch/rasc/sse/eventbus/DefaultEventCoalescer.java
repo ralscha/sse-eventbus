@@ -21,10 +21,11 @@ import org.jspecify.annotations.Nullable;
  * Default {@link EventCoalescer} that merges plain data events.
  * <p>
  * Two events are merged when both have no event id, no retry, no comment, no JSON view
- * and the same event name. Their data is joined with a line break, which the SSE
- * protocol encodes as multiple {@code data:} lines of a single event, so a client that
- * concatenates the data lines receives the original data in order. Events without data
- * are never merged.
+ * and the same event name. Their payload is taken from the converted value when present,
+ * or directly from a String payload (the send path writes String payloads as-is). The
+ * data is joined with a line break, which the SSE protocol encodes as multiple
+ * {@code data:} lines of a single event, so a client that concatenates the data lines
+ * receives the original data in order. Unconverted non-String payloads are never merged.
  */
 public class DefaultEventCoalescer implements EventCoalescer {
 
@@ -60,8 +61,11 @@ public class DefaultEventCoalescer implements EventCoalescer {
 		if (converted != null) {
 			return converted;
 		}
+		// A String payload is written as-is by the send path (the converted value stays
+		// null), so it can be merged directly. Unconverted non-String payloads are never
+		// merged: stringifying them here could differ from the converter's output.
 		Object data = event.getSseEvent().data();
-		return data != null ? String.valueOf(data) : null;
+		return data instanceof String string ? string : null;
 	}
 
 }

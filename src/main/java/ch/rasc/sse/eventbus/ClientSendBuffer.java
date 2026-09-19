@@ -279,7 +279,7 @@ final class ClientSendBuffer implements AutoCloseable {
 						deliver(event);
 						continue;
 					}
-					List<BufferedEvent> rest = new ArrayList<>();
+					List<BufferedEvent> rest = new ArrayList<>(MAX_COALESCE_BATCH - 1);
 					this.queue.drainTo(rest, MAX_COALESCE_BATCH - 1);
 					deliverCoalesced(coalescer, event, rest);
 				}
