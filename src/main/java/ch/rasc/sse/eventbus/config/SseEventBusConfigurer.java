@@ -28,6 +28,7 @@ import org.jspecify.annotations.Nullable;
 
 import ch.rasc.sse.eventbus.Client;
 import ch.rasc.sse.eventbus.ClientEvent;
+import ch.rasc.sse.eventbus.EventCoalescer;
 import ch.rasc.sse.eventbus.OverflowPolicy;
 import ch.rasc.sse.eventbus.ReplayStore;
 import ch.rasc.sse.eventbus.SlowClientListener;
@@ -220,6 +221,21 @@ public interface SseEventBusConfigurer {
 	 * Default: {@code null} (metrics are disabled)
 	 */
 	default @Nullable MeterRegistry meterRegistry() {
+		return null;
+	}
+
+	/**
+	 * Optional coalescer that merges consecutive buffered events of the same client into a
+	 * single SSE frame before they are written to the connection. This is useful for slow
+	 * clients that receive a high-frequency stream of small events (for example LLM token
+	 * streaming): fewer, larger writes reduce system call and network overhead and keep
+	 * the per-client send buffer from filling up.
+	 * <p>
+	 * Only used when {@link #clientSendBufferCapacity()} is greater than zero.
+	 * <p>
+	 * Default: {@code null} (coalescing disabled, each event is sent separately)
+	 */
+	default @Nullable EventCoalescer eventCoalescer() {
 		return null;
 	}
 

@@ -56,6 +56,8 @@ final class SseBackpressureMetrics {
 
 	private final Counter slowClientNotifications;
 
+	private final Counter coalescedEvents;
+
 	private final Map<String, Gauge> queueGauges = new ConcurrentHashMap<>();
 
 	private final Map<String, Supplier<Number>> strongSuppliers = new ConcurrentHashMap<>();
@@ -74,6 +76,9 @@ final class SseBackpressureMetrics {
 			.register(registry);
 		this.slowClientNotifications = Counter.builder(metric("slow.client.notifications"))
 			.description("Slow client callback invocations")
+			.register(registry);
+		this.coalescedEvents = Counter.builder(metric("coalesced.events"))
+			.description("Events merged into a single SSE frame by the event coalescer")
 			.register(registry);
 	}
 
@@ -95,6 +100,10 @@ final class SseBackpressureMetrics {
 
 	void recordNotification(String clientId) {
 		this.slowClientNotifications.increment();
+	}
+
+	void recordCoalesced(String clientId) {
+		this.coalescedEvents.increment();
 	}
 
 	void registerQueueGauge(String clientId, Supplier<Number> supplier) {
