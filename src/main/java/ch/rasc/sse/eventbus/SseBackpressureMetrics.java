@@ -34,6 +34,8 @@ import io.micrometer.core.instrument.MeterRegistry;
  * <li>{@code disconnected.clients} - clients disconnected by the
  * {@link OverflowPolicy#DISCONNECT} policy</li>
  * <li>{@code slow.client.notifications} - slow client callback invocations</li>
+ * <li>{@code coalesced.events} - successful pairwise merges (N events combined into one
+ * frame count as N - 1 merges, independently of delivery success)</li>
  * </ul>
  * Gauges:
  * <ul>
@@ -78,7 +80,7 @@ final class SseBackpressureMetrics {
 			.description("Slow client callback invocations")
 			.register(registry);
 		this.coalescedEvents = Counter.builder(metric("coalesced.events"))
-			.description("Events merged into a single SSE frame by the event coalescer")
+			.description("Successful pairwise event merges before delivery")
 			.register(registry);
 	}
 

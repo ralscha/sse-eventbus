@@ -210,13 +210,46 @@ With `taskScheduler()` returning `null`, sends are synchronous and retries, hear
 
 Event names cannot contain CR or LF. Event ids cannot contain CR, LF, or NUL; an empty id is allowed to reset the client's last event id. Retry durations must be nonnegative and fit in milliseconds. Invalid metadata is rejected when building an event, before it enters delivery queues. String data and comments support LF, CRLF, and CR line endings according to the [SSE stream format](https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream).
 
+### Slow clients and event coalescing
+
+Enable a bounded send buffer per client to keep slow connections from blocking shared send workers. When the buffer is full, `OverflowPolicy.DROP` drops the newest event; `OverflowPolicy.DISCONNECT` unregisters the slow client. Override `slowClientListener()` for overflow notifications and `meterRegistry()` to collect buffer metrics.
+
+Starting with 3.3.1, an optional `EventCoalescer` can combine adjacent queued events into fewer SSE frames:
+
+```java
+@Configuration
+class SseConfiguration implements SseEventBusConfigurer {
+
+  @Override
+  public int clientSendBufferCapacity() {
+    return 256;
+  }
+
+  @Override
+  public OverflowPolicy overflowPolicy() {
+    return OverflowPolicy.DROP;
+  }
+
+  @Override
+  public EventCoalescer eventCoalescer() {
+    return new DefaultEventCoalescer();
+  }
+}
+```
+
+Coalescing is disabled by default and requires a positive `clientSendBufferCapacity()`. `DefaultEventCoalescer` joins String or already converted payloads with a newline when event names match and neither event has an id, retry setting, comment, or JSON view. It normalizes CRLF and CR to LF before joining. Heartbeats remain separate. Each coalescing pass combines at most 32 events; overflow policies still apply when the queue fills.
+
+Clients receive one event whose `data` contains the joined payloads. For example, `"one"` and `"two"` become `"one\ntwo"`. Enable this only when clients accept that framing: joining JSON documents does not produce one valid JSON value, and joining text fragments adds a newline. Supply a custom `EventCoalescer` for other formats, returning `null` for pairs that must remain separate. Custom coalescers must be thread-safe, preserve required metadata, and leave input events unchanged. If a coalescer throws a runtime exception, the failure is logged and the events are sent separately.
+
+`SseEventBusListener.afterEventSent` runs once per written frame with the merged `ClientEvent`, after the send succeeds or fails. The `sse.eventbus.client.buffer.coalesced.events` counter counts successful pairwise merges before delivery: combining N events adds N - 1, even if the eventual write fails. Queue size measures waiting events and excludes the frame currently being sent.
+
 ## Maven
 The library is hosted on the Central Maven Repository
 ```
   <dependency>
     <groupId>ch.rasc</groupId>
     <artifactId>sse-eventbus</artifactId>
-    <version>3.1.0</version>
+    <version>3.3.1</version>
   </dependency>  
 ```
 

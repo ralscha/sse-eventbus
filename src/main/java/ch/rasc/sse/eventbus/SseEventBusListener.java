@@ -35,7 +35,8 @@ public interface SseEventBusListener {
 	}
 
 	/**
-	 * Called each time a message has been sent either successfully or unsuccessfully
+	 * Called each time a message has been sent either successfully or unsuccessfully.
+	 * When coalescing is enabled, called once per merged frame with the merged event.
 	 * @param clientEvent Data object comprises the client, event and value
 	 * @param exception <code>null</code> message has been sent successfully, otherwise
 	 * message delivery failed with this error

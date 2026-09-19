@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.1 - September 19, 2026
+* Add opt-in event coalescing for per-client send buffers through `SseEventBusConfigurer.eventCoalescer()`
+* Add `DefaultEventCoalescer` to join adjacent data events with the same name into newline-separated SSE data, preserving SSE line endings and keeping ids, retry settings, comments, and JSON views separate
+* Keep unmerged events in the bounded queue so replay cleanup can remove them and queue metrics reflect pending sends
+* Fall back to separate delivery when a custom coalescer throws, and stop coalescing delivery on dispatcher interruption
+* Add the Micrometer `sse.eventbus.client.buffer.coalesced.events` counter and document merged-frame delivery callbacks
+* Add deterministic regression coverage for coalescing, replay cleanup, failure handling, and payload ordering
+
 ## 3.3.0 - September 12, 2026
 * Add optional bounded per-client send buffers with dedicated dispatchers and configurable `DROP` or `DISCONNECT` overflow policies
 * Add slow-client callbacks and Micrometer metrics for queue sizes, overflows, dropped events, and disconnected clients

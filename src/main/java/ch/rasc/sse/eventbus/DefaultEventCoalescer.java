@@ -23,9 +23,10 @@ import org.jspecify.annotations.Nullable;
  * Two events are merged when both have no event id, no retry, no comment, no JSON view
  * and the same event name. Their payload is taken from the converted value when present,
  * or directly from a String payload (the send path writes String payloads as-is). The
- * data is joined with a line break, which the SSE protocol encodes as multiple
- * {@code data:} lines of a single event, so a client that concatenates the data lines
- * receives the original data in order. Unconverted non-String payloads are never merged.
+ * data is joined with a line break after normalizing CRLF and CR to LF, matching SSE
+ * encoding. Clients receive one event with newline-separated data, so event boundaries
+ * change and concatenated JSON documents are not a single JSON value. Unconverted
+ * non-String payloads are never merged.
  */
 public class DefaultEventCoalescer implements EventCoalescer {
 
@@ -33,8 +34,7 @@ public class DefaultEventCoalescer implements EventCoalescer {
 	public @Nullable ClientEvent coalesce(ClientEvent first, ClientEvent second) {
 		SseEvent firstEvent = first.getSseEvent();
 		SseEvent secondEvent = second.getSseEvent();
-		if (firstEvent.event() != null && secondEvent.event() != null
-				&& !firstEvent.event().equals(secondEvent.event())) {
+		if (!firstEvent.event().equals(secondEvent.event())) {
 			return null;
 		}
 		if (firstEvent.id().isPresent() || secondEvent.id().isPresent() || firstEvent.retry().isPresent()
@@ -48,12 +48,13 @@ public class DefaultEventCoalescer implements EventCoalescer {
 		if (firstData == null || secondData == null) {
 			return null;
 		}
-		String mergedData = firstData + "\n" + secondData;
-		SseEvent merged = SseEvent.builder()
-			.event(firstEvent.event())
-			.data(mergedData)
-			.build();
+		String mergedData = normalizeLineEndings(firstData) + "\n" + normalizeLineEndings(secondData);
+		SseEvent merged = SseEvent.builder().event(firstEvent.event()).data(mergedData).build();
 		return new ClientEvent(first.getClient(), merged, mergedData);
+	}
+
+	private static String normalizeLineEndings(String data) {
+		return data.replace("\r\n", "\n").replace('\r', '\n');
 	}
 
 	private static @Nullable String eventData(ClientEvent event) {

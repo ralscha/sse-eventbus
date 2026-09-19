@@ -407,10 +407,9 @@ class ClientSendBufferTest {
 		buffer.close();
 	}
 
-
 	@Test
 	void coalescerMergesAdjacentEvents() {
-		List<String> delivered = new ArrayList<>();
+		List<String> delivered = new CopyOnWriteArrayList<>();
 		DeliveryListener listener = new DeliveryListener() {
 			@Override
 			public void delivered(ClientEvent event) {
@@ -424,17 +423,17 @@ class ClientSendBufferTest {
 		};
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
 		}, listener, null, null, new DefaultEventCoalescer(), null);
-		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
 		buffer.offer(clientEvent("c1", "3"));
+		buffer.start();
 		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1\n2\n3"));
 		buffer.close();
 	}
 
 	@Test
 	void coalescerKeepsNonMergableEventsSeparate() {
-		List<String> delivered = new ArrayList<>();
+		List<String> delivered = new CopyOnWriteArrayList<>();
 		DeliveryListener listener = new DeliveryListener() {
 			@Override
 			public void delivered(ClientEvent event) {
@@ -448,10 +447,10 @@ class ClientSendBufferTest {
 		};
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
 		}, listener, null, null, (first, second) -> null, null);
-		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
 		buffer.offer(clientEvent("c1", "3"));
+		buffer.start();
 		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1", "2", "3"));
 		buffer.close();
 	}
@@ -462,15 +461,173 @@ class ClientSendBufferTest {
 		SseBackpressureMetrics metrics = new SseBackpressureMetrics(registry);
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
 		}, noopDeliveryListener(), null, null, new DefaultEventCoalescer(), metrics);
-		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
 		buffer.offer(clientEvent("c1", "3"));
+		buffer.start();
 		await().atMost(Duration.ofSeconds(2))
-			.untilAsserted(() -> assertThat(
-					registry.get("sse.eventbus.client.buffer.coalesced.events").counter().count())
-				.isEqualTo(2));
+			.untilAsserted(
+					() -> assertThat(registry.get("sse.eventbus.client.buffer.coalesced.events").counter().count())
+						.isEqualTo(2));
 		buffer.close();
+	}
+
+	@Test
+	void throwingCoalescerFallsBackToSeparateDelivery() {
+		List<String> sent = new CopyOnWriteArrayList<>();
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 4, OverflowPolicy.DROP,
+				(builder, heartbeat) -> sent.add(wire(builder)), noopDeliveryListener(), null, null,
+				(first, second) -> {
+					throw new IllegalStateException("coalescer failed");
+				}, null)) {
+			buffer.offer(clientEvent("c1", "1"));
+			buffer.offer(clientEvent("c1", "2"));
+			buffer.offer(clientEvent("c1", "3"));
+			buffer.start();
+			await().atMost(Duration.ofSeconds(2))
+				.untilAsserted(() -> assertThat(sent).containsExactly("event:test\ndata:1\n\n",
+						"event:test\ndata:2\n\n", "event:test\ndata:3\n\n"));
+			assertThat(buffer.isClosed()).isFalse();
+			buffer.offer(clientEvent("c1", "4"));
+			await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(sent).hasSize(4));
+		}
+	}
+
+	@Test
+	void coalescingLeavesPendingReplayableEventsAvailableForRemoval() throws Exception {
+		List<String> sent = new CopyOnWriteArrayList<>();
+		CountDownLatch sending = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		Client client = new Client("c1", new SseEmitter(0L), false);
+		ClientEvent one = new ClientEvent(client, SseEvent.builder().id("1").data("one").build(), null);
+		ClientEvent two = new ClientEvent(client, SseEvent.builder().id("2").data("two").build(), null);
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 4, OverflowPolicy.DROP, (builder, heartbeat) -> {
+			sent.add(wire(builder));
+			sending.countDown();
+			awaitIgnoringInterrupts(release);
+		}, noopDeliveryListener(), null, null, new DefaultEventCoalescer(), null)) {
+			buffer.offer(clientEvent("c1", "in-flight"));
+			buffer.offer(one);
+			buffer.offer(two);
+			buffer.start();
+			assertThat(sending.await(2, TimeUnit.SECONDS)).isTrue();
+			buffer.removePendingReplayableEvents();
+			buffer.offer(two);
+			release.countDown();
+			buffer.drain(2000);
+			assertThat(sent).containsExactly("event:test\ndata:in-flight\n\n", "id:2\ndata:two\n\n");
+		}
+		finally {
+			release.countDown();
+		}
+	}
+
+	@Test
+	void coalescingStopsOnDispatcherInterruption() {
+		AtomicInteger sent = new AtomicInteger();
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 3, OverflowPolicy.DROP, (builder, heartbeat) -> {
+			sent.incrementAndGet();
+			Thread.currentThread().interrupt();
+		}, noopDeliveryListener(), null, null, (first, second) -> null, null)) {
+			buffer.offer(clientEvent("c1", "1"));
+			buffer.offer(clientEvent("c1", "2"));
+			buffer.offer(clientEvent("c1", "3"));
+			buffer.start();
+			buffer.awaitDrained(System.nanoTime() + TimeUnit.SECONDS.toNanos(2));
+			assertThat(sent).hasValue(1);
+		}
+	}
+
+	@Test
+	void coalescingKeepsHeartbeatsSeparateAndExcludesThemFromDeliveryCallbacks() {
+		List<String> sent = new CopyOnWriteArrayList<>();
+		List<Boolean> heartbeats = new CopyOnWriteArrayList<>();
+		AtomicInteger delivered = new AtomicInteger();
+		DeliveryListener listener = new DeliveryListener() {
+			@Override
+			public void delivered(ClientEvent event) {
+				delivered.incrementAndGet();
+			}
+
+			@Override
+			public void failed(ClientEvent event, Exception exception) {
+				throw new AssertionError(exception);
+			}
+		};
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 5, OverflowPolicy.DROP, (builder, heartbeat) -> {
+			sent.add(wire(builder));
+			heartbeats.add(heartbeat);
+		}, listener, null, null, new DefaultEventCoalescer(), null)) {
+			buffer.offer(clientEvent("c1", "1"));
+			buffer.offer(clientEvent("c1", "2"));
+			buffer.offerHeartbeat(new Client("c1", new SseEmitter(0L), false), "keep-alive");
+			buffer.offer(clientEvent("c1", "3"));
+			buffer.offer(clientEvent("c1", "4"));
+			buffer.start();
+			buffer.drain(2000);
+			assertThat(sent).containsExactly("event:test\ndata:1\ndata:2\n\n", ":keep-alive\n\n",
+					"event:test\ndata:3\ndata:4\n\n");
+			assertThat(heartbeats).containsExactly(false, true, false);
+			assertThat(delivered).hasValue(2);
+		}
+	}
+
+	@Test
+	void coalescingBoundsEachFrameAndPreservesOrderAcrossBatches() {
+		List<String> sent = new CopyOnWriteArrayList<>();
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 70, OverflowPolicy.DROP,
+				(builder, heartbeat) -> sent.add(wire(builder)), noopDeliveryListener(), null, null,
+				new DefaultEventCoalescer(), null)) {
+			for (int i = 0; i < 70; i++) {
+				buffer.offer(clientEvent("c1", String.valueOf(i)));
+			}
+			buffer.start();
+			buffer.drain(2000);
+			assertThat(sent).hasSize(3);
+			assertThat(sent.stream().map(frame -> frame.lines().filter(line -> line.startsWith("data:")).count()))
+				.containsExactly(32L, 32L, 6L);
+			assertThat(sent.stream().flatMap(String::lines).filter(line -> line.startsWith("data:")))
+				.containsExactlyElementsOf(java.util.stream.IntStream.range(0, 70).mapToObj(i -> "data:" + i).toList());
+		}
+	}
+
+	@Test
+	void coalescingDoesNotRestoreCandidateRemovedDuringCallback() throws Exception {
+		List<String> sent = new CopyOnWriteArrayList<>();
+		CountDownLatch coalescing = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		try (ClientSendBuffer buffer = new ClientSendBuffer("c1", 3, OverflowPolicy.DROP,
+				(builder, heartbeat) -> sent.add(wire(builder)), noopDeliveryListener(), null, null,
+				(first, second) -> {
+					coalescing.countDown();
+					awaitIgnoringInterrupts(release);
+					return new ClientEvent(first.getClient(),
+							SseEvent.ofData(first.getSseEvent().data() + "+" + second.getSseEvent().data()), null);
+				}, new SseBackpressureMetrics(registry))) {
+			buffer.offer(clientEvent("c1", "first"));
+			buffer.offer(new ClientEvent(new Client("c1", new SseEmitter(0L), false),
+					SseEvent.builder().id("1").data("removed").build(), null));
+			buffer.offer(clientEvent("c1", "last"));
+			buffer.start();
+			assertThat(coalescing.await(2, TimeUnit.SECONDS)).isTrue();
+			buffer.removePendingReplayableEvents();
+			release.countDown();
+			buffer.drain(2000);
+			assertThat(sent).containsExactly("data:first+last\n\n");
+			assertThat(registry.get("sse.eventbus.client.buffer.coalesced.events").counter().count()).isEqualTo(1);
+		}
+		finally {
+			release.countDown();
+			registry.close();
+		}
+	}
+
+	private static String wire(SseEmitter.SseEventBuilder builder) {
+		return builder.build()
+			.stream()
+			.map(data -> data.getData().toString())
+			.collect(java.util.stream.Collectors.joining());
 	}
 
 }

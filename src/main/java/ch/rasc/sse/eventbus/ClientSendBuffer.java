@@ -16,8 +16,6 @@
 package ch.rasc.sse.eventbus;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -25,6 +23,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.jspecify.annotations.Nullable;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -53,11 +53,15 @@ import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
  * failure), so an enqueued event is never reported as delivered before the sink has run.
  * <p>
  * When an {@link EventCoalescer} is configured, consecutive buffered events that can be
- * merged are written as a single SSE frame: the dispatcher drains a bounded batch from
- * the queue and merges adjacent events. This keeps a high-frequency stream of small
- * events (for example LLM token streaming) from filling up the queue of a slow client.
+ * merged are written as a single SSE frame. Only events merged into that frame are
+ * removed from the queue; other pending events remain available for replay cleanup and
+ * count toward the buffer capacity.
  */
 final class ClientSendBuffer implements AutoCloseable {
+
+	private static final Log logger = LogFactory.getLog(ClientSendBuffer.class);
+
+	private static final int MAX_COALESCE_BATCH = 32;
 
 	/**
 	 * Result of an {@link #offer(ClientEvent)} call.
@@ -254,11 +258,6 @@ final class ClientSendBuffer implements AutoCloseable {
 		}
 	}
 
-	/**
-	 * Maximum number of events drained from the queue for a single coalescing pass.
-	 */
-	private static final int MAX_COALESCE_BATCH = 32;
-
 	private void dispatchLoop() {
 		try {
 			while (!this.closed.get() && !Thread.currentThread().isInterrupted()) {
@@ -279,9 +278,7 @@ final class ClientSendBuffer implements AutoCloseable {
 						deliver(event);
 						continue;
 					}
-					List<BufferedEvent> rest = new ArrayList<>(MAX_COALESCE_BATCH - 1);
-					this.queue.drainTo(rest, MAX_COALESCE_BATCH - 1);
-					deliverCoalesced(coalescer, event, rest);
+					deliverCoalesced(coalescer, event);
 				}
 			}
 		}
@@ -290,28 +287,36 @@ final class ClientSendBuffer implements AutoCloseable {
 		}
 	}
 
-	private void deliverCoalesced(EventCoalescer coalescer, BufferedEvent first, List<BufferedEvent> rest) {
+	private void deliverCoalesced(EventCoalescer coalescer, BufferedEvent first) {
 		BufferedEvent current = first;
-		for (BufferedEvent next : rest) {
-			if (current.heartbeat() || next.heartbeat()) {
-				// heartbeats are sent as-is, they are not merged with regular events
-				deliver(current);
-				current = next;
-				continue;
+		for (int i = 1; i < MAX_COALESCE_BATCH && !this.closed.get() && !Thread.currentThread().isInterrupted(); i++) {
+			BufferedEvent next = this.queue.peek();
+			if (next == null || current.heartbeat() || next.heartbeat()) {
+				break;
 			}
-			ClientEvent merged = coalescer.coalesce(current.event(), next.event());
-			if (merged != null) {
+			ClientEvent merged;
+			try {
+				merged = coalescer.coalesce(current.event(), next.event());
+			}
+			catch (RuntimeException ex) {
+				logger.warn("Event coalescer failed for client " + this.clientId + "; sending events separately", ex);
+				break;
+			}
+			if (merged == null) {
+				break;
+			}
+			// Replay cleanup or close may have removed this candidate while the
+			// application coalescer was running. Never merge a removed event.
+			if (this.queue.remove(next)) {
 				if (this.metrics != null) {
 					this.metrics.recordCoalesced(this.clientId);
 				}
 				current = new BufferedEvent(merged, false);
 			}
-			else {
-				deliver(current);
-				current = next;
-			}
 		}
-		deliver(current);
+		if (!this.closed.get() && !Thread.currentThread().isInterrupted()) {
+			deliver(current);
+		}
 	}
 
 	private void deliver(BufferedEvent bufferedEvent) {

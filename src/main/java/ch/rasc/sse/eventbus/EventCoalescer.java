@@ -26,10 +26,17 @@ import org.jspecify.annotations.Nullable;
  * frames and keeps the per-client send buffer from filling up, so fewer events are
  * dropped or trigger a disconnect.
  * <p>
- * Coalescing is opt-in: return {@code null} from {@link #coalesce(ClientEvent, ClientEvent)}
- * for pairs that must be sent separately. The default implementation is
- * {@link DefaultEventCoalescer}, which merges plain data events by joining their data
- * with a line break.
+ * Coalescing is opt-in: return {@code null} from
+ * {@link #coalesce(ClientEvent, ClientEvent)} for pairs that must be sent separately. The
+ * default implementation is {@link DefaultEventCoalescer}, which merges plain data events
+ * by joining their data with a line break.
+ * <p>
+ * Implementations must be thread-safe: different client dispatchers share the same
+ * coalescer. They must not mutate the input events and must return an event for the same
+ * client. Preserve any metadata required by the application, particularly replay ids, or
+ * return {@code null} to keep the events separate. Heartbeats are never passed to the
+ * coalescer. A {@link RuntimeException} is logged and the events are sent separately so a
+ * faulty coalescer does not stop delivery.
  */
 @FunctionalInterface
 public interface EventCoalescer {
@@ -41,7 +48,6 @@ public interface EventCoalescer {
 	 * @return the merged event, or {@code null} when the two events cannot be merged and
 	 * must be written separately
 	 */
-	@Nullable
-	ClientEvent coalesce(ClientEvent first, ClientEvent second);
+	@Nullable ClientEvent coalesce(ClientEvent first, ClientEvent second);
 
 }

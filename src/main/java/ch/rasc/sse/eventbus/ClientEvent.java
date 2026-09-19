@@ -50,8 +50,9 @@ public class ClientEvent {
 	}
 
 	/**
-	 * The already converted data of the event, or {@code null} when the data is
-	 * converted at send time.
+	 * The already converted data of the event, or {@code null} when no converted value is
+	 * available and the original payload is passed to the emitter. String payloads
+	 * normally use the original value directly.
 	 * @return the converted data
 	 */
 	public @Nullable String getConvertedValue() {

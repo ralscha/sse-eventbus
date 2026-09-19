@@ -183,11 +183,11 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * Optional capacity of a bounded per-client send buffer. When greater than zero
-	 * every client gets its own bounded queue with a dedicated dispatcher thread.
-	 * Slow clients (for example LLM token streaming consumers that cannot keep up)
-	 * fill their buffer and are handled according to {@link #overflowPolicy()}
-	 * instead of blocking the shared send workers.
+	 * Optional capacity of a bounded per-client send buffer. When greater than zero every
+	 * client gets its own bounded queue with a dedicated dispatcher thread. Slow clients
+	 * (for example LLM token streaming consumers that cannot keep up) fill their buffer
+	 * and are handled according to {@link #overflowPolicy()} instead of blocking the
+	 * shared send workers.
 	 * <p>
 	 * Default: -1 (disabled, events are sent through the shared send queue)
 	 */
@@ -225,13 +225,15 @@ public interface SseEventBusConfigurer {
 	}
 
 	/**
-	 * Optional coalescer that merges consecutive buffered events of the same client into a
-	 * single SSE frame before they are written to the connection. This is useful for slow
-	 * clients that receive a high-frequency stream of small events (for example LLM token
-	 * streaming): fewer, larger writes reduce system call and network overhead and keep
-	 * the per-client send buffer from filling up.
+	 * Optional coalescer that merges consecutive buffered events of the same client into
+	 * a single SSE frame before they are written to the connection. This is useful for
+	 * slow clients that receive a high-frequency stream of small events (for example LLM
+	 * token streaming): fewer, larger writes reduce system call and network overhead and
+	 * keep the per-client send buffer from filling up.
 	 * <p>
 	 * Only used when {@link #clientSendBufferCapacity()} is greater than zero.
+	 * Implementations must be thread-safe because the same instance is shared by all
+	 * client dispatchers. See {@link EventCoalescer} for the delivery contract.
 	 * <p>
 	 * Default: {@code null} (coalescing disabled, each event is sent separately)
 	 */

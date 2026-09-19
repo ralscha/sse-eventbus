@@ -15,13 +15,19 @@
  */
 package ch.rasc.sse.eventbus;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +41,9 @@ import ch.rasc.sse.eventbus.config.EnableSseEventBus;
 import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.jspecify.annotations.Nullable;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @ContextConfiguration
 @DirtiesContext
@@ -105,28 +113,59 @@ class SseEventBusBackpressureCoalesceTest {
 	}
 
 	@Test
-	void coalescerMergesEventsIntoFewerWrites() {
-		this.eventBus.registerClient("coalesced", new SseEmitter(0L));
+	void coalescerMergesEventsIntoFewerWrites() throws Exception {
+		CountDownLatch sending = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		List<String> frames = new CopyOnWriteArrayList<>();
+		double initialMerges = REGISTRY.get("sse.eventbus.client.buffer.coalesced.events").counter().count();
+		SseEmitter emitter = new SseEmitter(0L) {
+			@Override
+			public void send(SseEventBuilder builder) throws IOException {
+				frames
+					.add(builder.build().stream().map(data -> data.getData().toString()).collect(Collectors.joining()));
+				sending.countDown();
+				try {
+					if (!release.await(10, TimeUnit.SECONDS)) {
+						throw new IOException("Test latch was not released");
+					}
+				}
+				catch (InterruptedException ex) {
+					Thread.currentThread().interrupt();
+					throw new IOException(ex);
+				}
+			}
+		};
+		this.eventBus.registerClient("coalesced", emitter);
 		this.eventBus.subscribe("coalesced", "test");
-		for (int i = 0; i < 50; i++) {
-			this.eventBus.handleEvent(SseEvent.of("test", "msg-" + i));
+		try {
+			this.eventBus.handleEvent(SseEvent.of("test", "msg-0"));
+			assertThat(sending.await(3, TimeUnit.SECONDS)).isTrue();
+			for (int i = 1; i < 50; i++) {
+				this.eventBus.handleEvent(SseEvent.of("test", "msg-" + i));
+			}
+			// Hold the first send until all remaining events reach the client buffer.
+			await().atMost(Duration.ofSeconds(5))
+				.untilAsserted(() -> assertThat(REGISTRY.get("sse.eventbus.client.buffer.queue.size").gauge().value())
+					.isEqualTo(49));
+			assertThat(SENT_NOTIFICATIONS).hasValue(0);
+			release.countDown();
+
+			// Queue size alone excludes in-flight writes. Wait for delivery accounting
+			// to cover every published event before inspecting the frames.
+			await().atMost(Duration.ofSeconds(5))
+				.untilAsserted(() -> assertThat(SENT_NOTIFICATIONS.get()
+						+ REGISTRY.get("sse.eventbus.client.buffer.coalesced.events").counter().count() - initialMerges)
+					.isEqualTo(50));
+			assertThat(frames).hasSizeBetween(1, 49);
+			assertThat(SENT_NOTIFICATIONS).hasValue(frames.size());
+			assertThat(frames.stream().flatMap(String::lines).filter(line -> line.startsWith("data:")))
+				.containsExactlyElementsOf(IntStream.range(0, 50).mapToObj(i -> "data:msg-" + i).toList());
+			assertThat(this.eventBus.getAllClientIds()).contains("coalesced");
 		}
-
-		// the dispatcher merged adjacent events into single SSE frames
-		await().atMost(Duration.ofSeconds(5))
-			.untilAsserted(() -> assertThat(
-					REGISTRY.get("sse.eventbus.client.buffer.coalesced.events").counter().count())
-				.isGreaterThan(0));
-		// wait until the whole batch has been delivered (queue drained) before
-		// comparing the number of writes against the number of published events
-		await().atMost(Duration.ofSeconds(5)).untilAsserted(
-				() -> assertThat(REGISTRY.get("sse.eventbus.client.buffer.queue.size").gauge().value()).isZero());
-		assertThat(SENT_NOTIFICATIONS.get()).isGreaterThan(0);
-		assertThat(SENT_NOTIFICATIONS.get()).isLessThan(50);
-
-		// the client stays connected
-		assertThat(this.eventBus.getAllClientIds()).contains("coalesced");
-		this.eventBus.unregisterClient("coalesced");
+		finally {
+			release.countDown();
+			this.eventBus.unregisterClient("coalesced");
+		}
 	}
 
 }
