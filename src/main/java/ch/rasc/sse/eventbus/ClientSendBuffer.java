@@ -16,6 +16,8 @@
 package ch.rasc.sse.eventbus;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -49,6 +51,11 @@ import ch.rasc.sse.eventbus.config.SseEventBusConfigurer;
  * Delivery accounting happens on the dispatcher thread: {@link DeliveryListener} is
  * invoked after the event was actually written to the {@code SseEmitter} (or after a send
  * failure), so an enqueued event is never reported as delivered before the sink has run.
+ * <p>
+ * When an {@link EventCoalescer} is configured, consecutive buffered events that can be
+ * merged are written as a single SSE frame: the dispatcher drains a bounded batch from
+ * the queue and merges adjacent events. This keeps a high-frequency stream of small
+ * events (for example LLM token streaming) from filling up the queue of a slow client.
  */
 final class ClientSendBuffer implements AutoCloseable {
 
@@ -130,6 +137,8 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	private final @Nullable SlowClientListener listener;
 
+	private final @Nullable EventCoalescer coalescer;
+
 	private final @Nullable SseBackpressureMetrics metrics;
 
 	private final AtomicBoolean closed = new AtomicBoolean();
@@ -142,7 +151,8 @@ final class ClientSendBuffer implements AutoCloseable {
 
 	ClientSendBuffer(String clientId, int capacity, OverflowPolicy overflowPolicy, EventSink sink,
 			DeliveryListener deliveryListener, @Nullable Consumer<ClientSendBuffer> onDisconnect,
-			@Nullable SlowClientListener listener, @Nullable SseBackpressureMetrics metrics) {
+			@Nullable SlowClientListener listener, @Nullable EventCoalescer coalescer,
+			@Nullable SseBackpressureMetrics metrics) {
 		this.clientId = Objects.requireNonNull(clientId, "clientId");
 		if (capacity <= 0) {
 			throw new IllegalArgumentException("clientSendBufferCapacity must be > 0");
@@ -154,6 +164,7 @@ final class ClientSendBuffer implements AutoCloseable {
 		this.deliveryListener = Objects.requireNonNull(deliveryListener, "deliveryListener");
 		this.onDisconnect = onDisconnect;
 		this.listener = listener;
+		this.coalescer = coalescer;
 		this.metrics = metrics;
 	}
 
@@ -243,6 +254,11 @@ final class ClientSendBuffer implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * Maximum number of events drained from the queue for a single coalescing pass.
+	 */
+	private static final int MAX_COALESCE_BATCH = 32;
+
 	private void dispatchLoop() {
 		try {
 			while (!this.closed.get() && !Thread.currentThread().isInterrupted()) {
@@ -258,13 +274,44 @@ final class ClientSendBuffer implements AutoCloseable {
 					continue;
 				}
 				if (!this.closed.get()) {
-					deliver(event);
+					EventCoalescer coalescer = this.coalescer;
+					if (coalescer == null) {
+						deliver(event);
+						continue;
+					}
+					List<BufferedEvent> rest = new ArrayList<>();
+					this.queue.drainTo(rest, MAX_COALESCE_BATCH - 1);
+					deliverCoalesced(coalescer, event, rest);
 				}
 			}
 		}
 		catch (InterruptedException ie) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	private void deliverCoalesced(EventCoalescer coalescer, BufferedEvent first, List<BufferedEvent> rest) {
+		BufferedEvent current = first;
+		for (BufferedEvent next : rest) {
+			if (current.heartbeat() || next.heartbeat()) {
+				// heartbeats are sent as-is, they are not merged with regular events
+				deliver(current);
+				current = next;
+				continue;
+			}
+			ClientEvent merged = coalescer.coalesce(current.event(), next.event());
+			if (merged != null) {
+				if (this.metrics != null) {
+					this.metrics.recordCoalesced(this.clientId);
+				}
+				current = new BufferedEvent(merged, false);
+			}
+			else {
+				deliver(current);
+				current = next;
+			}
+		}
+		deliver(current);
 	}
 
 	private void deliver(BufferedEvent bufferedEvent) {

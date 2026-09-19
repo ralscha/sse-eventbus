@@ -107,6 +107,8 @@ public class SseEventBus {
 
 	private final SlowClientListener slowClientListener;
 
+	private final @Nullable EventCoalescer eventCoalescer;
+
 	private final @Nullable SseBackpressureMetrics backpressureMetrics;
 
 	private final @Nullable ReplayStore replayStore;
@@ -199,6 +201,7 @@ public class SseEventBus {
 		this.clientSendBufferCapacity = configurer.clientSendBufferCapacity();
 		this.overflowPolicy = configurer.overflowPolicy();
 		this.slowClientListener = configurer.slowClientListener();
+		this.eventCoalescer = configurer.eventCoalescer();
 		MeterRegistry meterRegistry = configurer.meterRegistry();
 		this.backpressureMetrics = meterRegistry != null ? new SseBackpressureMetrics(meterRegistry) : null;
 		if (this.backpressureMetrics != null) {
@@ -1044,7 +1047,7 @@ public class SseEventBus {
 							notifyAfterEventSent(event, exception);
 						}
 					}, disconnectedBuffer -> unregisterClient(client.getId(), disconnectedBuffer),
-					this.slowClientListener, this.backpressureMetrics);
+					this.slowClientListener, this.eventCoalescer, this.backpressureMetrics);
 			// Register the queue gauge before the buffer becomes visible to the send
 			// workers to avoid a registration race with an early disconnect
 			if (this.backpressureMetrics != null) {

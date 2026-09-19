@@ -50,7 +50,7 @@ class ClientSendBufferTest {
 		try (ClientSendBuffer buffer = new ClientSendBuffer("race", 1, OverflowPolicy.DISCONNECT,
 				(builder, heartbeat) -> {
 				}, noopDeliveryListener(), closedBuffer -> disconnects.incrementAndGet(),
-				event -> notifications.incrementAndGet(), new SseBackpressureMetrics(registry))) {
+				event -> notifications.incrementAndGet(), null, new SseBackpressureMetrics(registry))) {
 			buffer.offer(clientEvent("race", "queued"));
 			List<Future<OfferResult>> offers = new ArrayList<>();
 			for (int i = 0; i < 8; i++) {
@@ -86,7 +86,7 @@ class ClientSendBufferTest {
 		var starters = Executors.newFixedThreadPool(8);
 		try (ClientSendBuffer buffer = new ClientSendBuffer("concurrent-start", 1, OverflowPolicy.DROP,
 				(builder, heartbeat) -> {
-				}, noopDeliveryListener(), null, null, null)) {
+				}, noopDeliveryListener(), null, null, null, null)) {
 			List<Future<?>> tasks = new ArrayList<>();
 			for (int i = 0; i < 8; i++) {
 				tasks.add(starters.submit(() -> {
@@ -117,7 +117,7 @@ class ClientSendBufferTest {
 		try (ClientSendBuffer buffer = new ClientSendBuffer("throwing-listener", 1, OverflowPolicy.DROP,
 				(builder, heartbeat) -> sent.incrementAndGet(), noopDeliveryListener(), null, event -> {
 					throw new IllegalStateException("listener failed");
-				}, null)) {
+				}, null, null)) {
 			buffer.offer(clientEvent("throwing-listener", "accepted"));
 			assertThat(buffer.offer(clientEvent("throwing-listener", "overflow"))).isEqualTo(OfferResult.DROPPED);
 			buffer.start();
@@ -160,7 +160,7 @@ class ClientSendBufferTest {
 			}
 		};
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
-		}, listener, null, null, null);
+		}, listener, null, null, null, null);
 		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
@@ -185,7 +185,7 @@ class ClientSendBufferTest {
 			}
 		};
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP,
-				(builder, heartbeat) -> sent.add(builder.toString()), listener, null, null, null);
+				(builder, heartbeat) -> sent.add(builder.toString()), listener, null, null, null, null);
 		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1"));
@@ -212,7 +212,7 @@ class ClientSendBufferTest {
 			throw new IOException("connection lost");
 		};
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 5, OverflowPolicy.DROP, failingSink, listener,
-				closedBuffer -> disconnected.set(true), null, null);
+				closedBuffer -> disconnected.set(true), null, null, null);
 		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
@@ -227,7 +227,7 @@ class ClientSendBufferTest {
 	void dropPolicyRejectsOverflowAndNotifiesListener() {
 		List<SlowClientEvent> slowClientEvents = new CopyOnWriteArrayList<>();
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 2, OverflowPolicy.DROP, (builder, heartbeat) -> {
-		}, noopDeliveryListener(), null, slowClientEvents::add, null);
+		}, noopDeliveryListener(), null, slowClientEvents::add, null, null);
 
 		// Fill the buffer while the dispatcher is not running to keep the queue size
 		// deterministic, then start it so the pending notification is delivered
@@ -253,7 +253,7 @@ class ClientSendBufferTest {
 		AtomicBoolean disconnected = new AtomicBoolean();
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 1, OverflowPolicy.DISCONNECT, (builder, heartbeat) -> {
 		}, noopDeliveryListener(), closedBuffer -> disconnected.set(true), event -> {
-		}, null);
+		}, null, null);
 
 		assertThat(buffer.offer(clientEvent("c1", "1"))).isEqualTo(OfferResult.ACCEPTED);
 		assertThat(buffer.offer(clientEvent("c1", "2"))).isEqualTo(OfferResult.DISCONNECTED);
@@ -266,7 +266,7 @@ class ClientSendBufferTest {
 	@Test
 	void offerReturnsClosedAfterClose() {
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 5, OverflowPolicy.DROP, (builder, heartbeat) -> {
-		}, noopDeliveryListener(), null, null, null);
+		}, noopDeliveryListener(), null, null, null, null);
 		buffer.close();
 		assertThat(buffer.offer(clientEvent("c1", "1"))).isEqualTo(OfferResult.CLOSED);
 	}
@@ -275,7 +275,7 @@ class ClientSendBufferTest {
 	void closeDoesNotNotifyDisconnect() {
 		AtomicBoolean disconnected = new AtomicBoolean();
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 5, OverflowPolicy.DISCONNECT, (builder, heartbeat) -> {
-		}, noopDeliveryListener(), closedBuffer -> disconnected.set(true), null, null);
+		}, noopDeliveryListener(), closedBuffer -> disconnected.set(true), null, null, null);
 		buffer.close();
 		assertThat(disconnected).isFalse();
 	}
@@ -291,7 +291,7 @@ class ClientSendBufferTest {
 				Thread.currentThread().interrupt();
 			}
 			sent.add(builder.toString());
-		}, noopDeliveryListener(), null, null, null);
+		}, noopDeliveryListener(), null, null, null, null);
 		buffer.start();
 		buffer.offer(clientEvent("c1", "1"));
 		buffer.offer(clientEvent("c1", "2"));
@@ -304,7 +304,7 @@ class ClientSendBufferTest {
 	@Test
 	void drainingRejectsNewEventsEvenAfterDispatcherExits() {
 		try (ClientSendBuffer buffer = new ClientSendBuffer("drain", 2, OverflowPolicy.DROP, (builder, heartbeat) -> {
-		}, noopDeliveryListener(), null, null, null)) {
+		}, noopDeliveryListener(), null, null, null, null)) {
 			buffer.start();
 			buffer.startDraining();
 			assertThat(buffer.offer(clientEvent("drain", "late"))).isEqualTo(OfferResult.CLOSED);
@@ -323,7 +323,7 @@ class ClientSendBufferTest {
 			sends.incrementAndGet();
 			sending.countDown();
 			awaitIgnoringInterrupts(release);
-		}, noopDeliveryListener(), null, null, null)) {
+		}, noopDeliveryListener(), null, null, null, null)) {
 			buffer.start();
 			buffer.offer(clientEvent("close", "in-flight"));
 			assertThat(sending.await(2, TimeUnit.SECONDS)).isTrue();
@@ -350,7 +350,7 @@ class ClientSendBufferTest {
 				}, noopDeliveryListener(), closedBuffer -> disconnected.set(true), event -> {
 					listenerEntered.countDown();
 					awaitIgnoringInterrupts(releaseListener);
-				}, null)) {
+				}, null, null)) {
 			buffer.offer(clientEvent("disconnect", "queued"));
 			var overflow = producer.submit(() -> buffer.offer(clientEvent("disconnect", "overflow")));
 			try {
@@ -391,7 +391,7 @@ class ClientSendBufferTest {
 		SseBackpressureMetrics metrics = new SseBackpressureMetrics(registry);
 		ClientSendBuffer buffer = new ClientSendBuffer("c1", 1, OverflowPolicy.DROP, (builder, heartbeat) -> {
 		}, noopDeliveryListener(), null, event -> {
-		}, metrics);
+		}, null, metrics);
 
 		assertThat(buffer.offer(clientEvent("c1", "1"))).isEqualTo(OfferResult.ACCEPTED);
 		assertThat(buffer.offer(clientEvent("c1", "2"))).isEqualTo(OfferResult.DROPPED);
@@ -404,6 +404,72 @@ class ClientSendBufferTest {
 			.untilAsserted(() -> assertThat(
 					registry.get("sse.eventbus.client.buffer.slow.client.notifications").counter().count())
 				.isEqualTo(1));
+		buffer.close();
+	}
+
+
+	@Test
+	void coalescerMergesAdjacentEvents() {
+		List<String> delivered = new ArrayList<>();
+		DeliveryListener listener = new DeliveryListener() {
+			@Override
+			public void delivered(ClientEvent event) {
+				delivered.add(event.getConvertedValue());
+			}
+
+			@Override
+			public void failed(ClientEvent event, Exception exception) {
+				// nothing here
+			}
+		};
+		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
+		}, listener, null, null, new DefaultEventCoalescer(), null);
+		buffer.start();
+		buffer.offer(clientEvent("c1", "1"));
+		buffer.offer(clientEvent("c1", "2"));
+		buffer.offer(clientEvent("c1", "3"));
+		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1\n2\n3"));
+		buffer.close();
+	}
+
+	@Test
+	void coalescerKeepsNonMergableEventsSeparate() {
+		List<String> delivered = new ArrayList<>();
+		DeliveryListener listener = new DeliveryListener() {
+			@Override
+			public void delivered(ClientEvent event) {
+				delivered.add(event.getConvertedValue());
+			}
+
+			@Override
+			public void failed(ClientEvent event, Exception exception) {
+				// nothing here
+			}
+		};
+		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
+		}, listener, null, null, (first, second) -> null, null);
+		buffer.start();
+		buffer.offer(clientEvent("c1", "1"));
+		buffer.offer(clientEvent("c1", "2"));
+		buffer.offer(clientEvent("c1", "3"));
+		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(delivered).containsExactly("1", "2", "3"));
+		buffer.close();
+	}
+
+	@Test
+	void coalescerRecordsMetric() {
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		SseBackpressureMetrics metrics = new SseBackpressureMetrics(registry);
+		ClientSendBuffer buffer = new ClientSendBuffer("c1", 10, OverflowPolicy.DROP, (builder, heartbeat) -> {
+		}, noopDeliveryListener(), null, null, new DefaultEventCoalescer(), metrics);
+		buffer.start();
+		buffer.offer(clientEvent("c1", "1"));
+		buffer.offer(clientEvent("c1", "2"));
+		buffer.offer(clientEvent("c1", "3"));
+		await().atMost(Duration.ofSeconds(2))
+			.untilAsserted(() -> assertThat(
+					registry.get("sse.eventbus.client.buffer.coalesced.events").counter().count())
+				.isEqualTo(2));
 		buffer.close();
 	}
 

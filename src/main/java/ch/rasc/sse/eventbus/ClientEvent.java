@@ -49,6 +49,15 @@ public class ClientEvent {
 		return this.event;
 	}
 
+	/**
+	 * The already converted data of the event, or {@code null} when the data is
+	 * converted at send time.
+	 * @return the converted data
+	 */
+	public @Nullable String getConvertedValue() {
+		return this.convertedValue;
+	}
+
 	public SseEventBuilder createSseEventBuilder() {
 
 		SseEventBuilder sseBuilder = SseEmitter.event();
