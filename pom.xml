@@ -45,7 +45,7 @@
   </issueManagement>
 
   <properties>
-    <immutables.version>2.12.2</immutables.version>
+    <immutables.version>2.12.3</immutables.version>
   </properties>
 
   <dependencyManagement>
@@ -111,7 +111,7 @@
     <dependency>
       <groupId>com.launchdarkly</groupId>
       <artifactId>okhttp-eventsource</artifactId>
-      <version>5.0.0</version>
+      <version>5.0.1</version>
       <scope>test</scope>
     </dependency>
 
@@ -341,7 +341,7 @@
       <plugin>
         <groupId>org.sonatype.central</groupId>
         <artifactId>central-publishing-maven-plugin</artifactId>
-        <version>0.11.0</version>
+        <version>0.12.0</version>
         <extensions>true</extensions>
         <configuration>
           <publishingServerId>central</publishingServerId>
