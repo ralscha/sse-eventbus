@@ -89,7 +89,7 @@
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>3.2.2</version>
+      <version>3.2.4</version>
       <optional>true</optional>
     </dependency>
 
@@ -294,12 +294,12 @@
           <dependency>
             <groupId>net.sourceforge.pmd</groupId>
             <artifactId>pmd-core</artifactId>
-            <version>7.27.0</version>
+            <version>7.28.0</version>
           </dependency>
           <dependency>
             <groupId>net.sourceforge.pmd</groupId>
             <artifactId>pmd-java</artifactId>
-            <version>7.27.0</version>
+            <version>7.28.0</version>
           </dependency>
         </dependencies>
       </plugin>
@@ -376,7 +376,7 @@
                 <path>
                   <groupId>com.uber.nullaway</groupId>
                   <artifactId>nullaway</artifactId>
-                  <version>0.14.1</version>
+                  <version>0.14.2</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>
