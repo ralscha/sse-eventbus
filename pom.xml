@@ -334,7 +334,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.6.0</version>
+        <version>3.6.1</version>
         <configuration>
           <argLine>-Xshare:off -javaagent:&quot;${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar&quot;</argLine>
         </configuration>
@@ -376,7 +376,7 @@
                 <path>
                   <groupId>com.uber.nullaway</groupId>
                   <artifactId>nullaway</artifactId>
-                  <version>0.14.2</version>
+                  <version>0.14.3</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>
