@@ -252,7 +252,7 @@ final class ClientSendBuffer implements AutoCloseable {
 			try {
 				slowClientListener.onSlowClient(slowClientEvent);
 			}
-			catch (RuntimeException ex) {
+			catch (RuntimeException ignored) {
 				// listener failures must not affect event delivery
 			}
 		}
@@ -420,7 +420,7 @@ final class ClientSendBuffer implements AutoCloseable {
 			try {
 				disconnect.accept(this);
 			}
-			catch (RuntimeException ex) {
+			catch (RuntimeException ignored) {
 				// ignore disconnect callback failures
 			}
 		}
