@@ -54,7 +54,7 @@
       <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-framework-bom</artifactId>
-        <version>7.0.10</version>
+        <version>7.1.0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -66,13 +66,13 @@
     <dependency>
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-observation</artifactId>
-      <version>1.17.2</version>
+      <version>1.18.0</version>
     </dependency>
 
     <dependency>
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-core</artifactId>
-      <version>1.17.2</version>
+      <version>1.18.0</version>
     </dependency>
 
     <dependency>
@@ -126,14 +126,14 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
-      <version>4.1.2</version>
+      <version>4.2.0</version>
       <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
-      <version>4.1.2</version>
+      <version>4.2.0</version>
       <scope>test</scope>
     </dependency>
 
@@ -371,12 +371,12 @@
                 <path>
                   <groupId>com.google.errorprone</groupId>
                   <artifactId>error_prone_core</artifactId>
-                  <version>2.52.0</version>
+                  <version>2.53.0</version>
                 </path>
                 <path>
                   <groupId>com.uber.nullaway</groupId>
                   <artifactId>nullaway</artifactId>
-                  <version>0.14.3</version>
+                  <version>0.14.4</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>
