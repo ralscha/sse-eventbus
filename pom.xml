@@ -112,7 +112,7 @@
     <dependency>
       <groupId>com.launchdarkly</groupId>
       <artifactId>okhttp-eventsource</artifactId>
-      <version>5.0.2</version>
+      <version>6.0.0</version>
       <scope>test</scope>
     </dependency>
 
