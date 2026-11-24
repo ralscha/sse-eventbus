@@ -159,7 +159,7 @@ class SseEventBusBackpressureCoalesceTest {
 			assertThat(frames).hasSizeBetween(1, 49);
 			assertThat(SENT_NOTIFICATIONS).hasValue(frames.size());
 			assertThat(frames.stream().flatMap(String::lines).filter(line -> line.startsWith("data:")))
-				.containsExactlyElementsOf(IntStream.range(0, 50).mapToObj(i -> "data:msg-" + i).toList());
+				.containsExactlyElementsOf(IntStream.range(0, 50).mapToObj(i -> "data: msg-" + i).toList());
 			assertThat(this.eventBus.getAllClientIds()).contains("coalesced");
 		}
 		finally {

@@ -29,14 +29,23 @@ class ClientEventTest {
 	@Test
 	void encodesAllSseLineEndingsInStringData() {
 		String wire = wire(SseEvent.ofData("first\r\nsecond\rthird\n"), null);
-		assertThat(wire).isEqualTo("data:first\ndata:second\ndata:third\ndata:\n\n");
+		assertThat(wire).isEqualTo("data: first\ndata: second\ndata: third\ndata: \n\n");
 	}
 
 	@Test
 	void encodesConvertedDataAndMultilineCommentsWithoutInjectingFields() {
 		SseEvent event = SseEvent.builder().data(123).comment("first\r\nid:injected\rdata:injected\n").build();
 		assertThat(wire(event, "converted\rvalue"))
-			.isEqualTo(":first\n:id:injected\n:data:injected\n:\ndata:converted\ndata:value\n\n");
+			.isEqualTo(":first\n:id:injected\n:data:injected\n:\ndata: converted\ndata: value\n\n");
+	}
+
+	@Test
+	void preservesPayloadWhitespaceAfterDataFieldSeparator() {
+		String data = " leading \n  indented\t\n";
+		// Spring adds one framing space after data:, separate from payload whitespace.
+		String expected = "data:  leading \ndata:   indented\t\ndata: \n\n";
+		assertThat(wire(SseEvent.ofData(data), null)).isEqualTo(expected);
+		assertThat(wire(SseEvent.ofData(123), data)).isEqualTo(expected);
 	}
 
 	@Test
@@ -50,7 +59,7 @@ class ClientEventTest {
 		assertThatIllegalArgumentException()
 			.isThrownBy(() -> SseEvent.builder().retry(Duration.ofSeconds(Long.MAX_VALUE)).build());
 		assertThat(wire(SseEvent.builder().id("").retry(Duration.ZERO).data("").build(), null))
-			.isEqualTo("id:\nretry:0\ndata:\n\n");
+			.isEqualTo("id:\nretry:0\ndata: \n\n");
 	}
 
 	private static String wire(SseEvent event, @Nullable String converted) {

@@ -39,7 +39,7 @@ class DefaultEventCoalescerTest {
 		ClientEvent first = new ClientEvent(this.client, SseEvent.ofData("one" + lineEnding), null);
 		ClientEvent second = new ClientEvent(this.client, SseEvent.ofData("two"), null);
 		ClientEvent merged = Objects.requireNonNull(this.coalescer.coalesce(first, second));
-		assertThat(wire(merged)).isEqualTo("data:one\ndata:\ndata:two\n\n");
+		assertThat(wire(merged)).isEqualTo("data: one\ndata: \ndata: two\n\n");
 	}
 
 	@Test
@@ -48,7 +48,7 @@ class DefaultEventCoalescerTest {
 		ClientEvent second = new ClientEvent(this.client, SseEvent.of("tokens", 2), "two\r\nthree");
 		ClientEvent merged = Objects.requireNonNull(this.coalescer.coalesce(first, second));
 		assertThat(merged.getClient()).isSameAs(this.client);
-		assertThat(wire(merged)).isEqualTo("event:tokens\ndata:converted\ndata:\ndata:two\ndata:three\n\n");
+		assertThat(wire(merged)).isEqualTo("event:tokens\ndata: converted\ndata: \ndata: two\ndata: three\n\n");
 	}
 
 	@Test
@@ -71,7 +71,7 @@ class DefaultEventCoalescerTest {
 	void preservesEmptyPayloads() {
 		ClientEvent empty = new ClientEvent(this.client, SseEvent.ofData(""), null);
 		ClientEvent merged = Objects.requireNonNull(this.coalescer.coalesce(empty, empty));
-		assertThat(wire(merged)).isEqualTo("data:\ndata:\n\n");
+		assertThat(wire(merged)).isEqualTo("data: \ndata: \n\n");
 	}
 
 	private static String wire(ClientEvent event) {

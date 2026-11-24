@@ -485,8 +485,8 @@ class ClientSendBufferTest {
 			buffer.offer(clientEvent("c1", "3"));
 			buffer.start();
 			await().atMost(Duration.ofSeconds(2))
-				.untilAsserted(() -> assertThat(sent).containsExactly("event:test\ndata:1\n\n",
-						"event:test\ndata:2\n\n", "event:test\ndata:3\n\n"));
+				.untilAsserted(() -> assertThat(sent).containsExactly("event:test\ndata: 1\n\n",
+						"event:test\ndata: 2\n\n", "event:test\ndata: 3\n\n"));
 			assertThat(buffer.isClosed()).isFalse();
 			buffer.offer(clientEvent("c1", "4"));
 			await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(sent).hasSize(4));
@@ -515,7 +515,7 @@ class ClientSendBufferTest {
 			buffer.offer(two);
 			release.countDown();
 			buffer.drain(2000);
-			assertThat(sent).containsExactly("event:test\ndata:in-flight\n\n", "id:2\ndata:two\n\n");
+			assertThat(sent).containsExactly("event:test\ndata: in-flight\n\n", "id:2\ndata: two\n\n");
 		}
 		finally {
 			release.countDown();
@@ -565,8 +565,8 @@ class ClientSendBufferTest {
 			buffer.offer(clientEvent("c1", "4"));
 			buffer.start();
 			buffer.drain(2000);
-			assertThat(sent).containsExactly("event:test\ndata:1\ndata:2\n\n", ":keep-alive\n\n",
-					"event:test\ndata:3\ndata:4\n\n");
+			assertThat(sent).containsExactly("event:test\ndata: 1\ndata: 2\n\n", ":keep-alive\n\n",
+					"event:test\ndata: 3\ndata: 4\n\n");
 			assertThat(heartbeats).containsExactly(false, true, false);
 			assertThat(delivered).hasValue(2);
 		}
@@ -587,7 +587,7 @@ class ClientSendBufferTest {
 			assertThat(sent.stream().map(frame -> frame.lines().filter(line -> line.startsWith("data:")).count()))
 				.containsExactly(32L, 32L, 6L);
 			assertThat(sent.stream().flatMap(String::lines).filter(line -> line.startsWith("data:")))
-				.containsExactlyElementsOf(java.util.stream.IntStream.range(0, 70).mapToObj(i -> "data:" + i).toList());
+				.containsExactlyElementsOf(java.util.stream.IntStream.range(0, 70).mapToObj(i -> "data: " + i).toList());
 		}
 	}
 
@@ -614,7 +614,7 @@ class ClientSendBufferTest {
 			buffer.removePendingReplayableEvents();
 			release.countDown();
 			buffer.drain(2000);
-			assertThat(sent).containsExactly("data:first+last\n\n");
+			assertThat(sent).containsExactly("data: first+last\n\n");
 			assertThat(registry.get("sse.eventbus.client.buffer.coalesced.events").counter().count()).isEqualTo(1);
 		}
 		finally {
